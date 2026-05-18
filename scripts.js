@@ -3621,6 +3621,7 @@ function importCSV(event) {
     reader.readAsText(file, "UTF-8");
 }
 */
+/*
 function importCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -3636,20 +3637,25 @@ function importCSV(event) {
             const lines = content.split(/\r?\n/).filter(line => line.trim() !== "");
             lines.shift(); // Remove headers
 
-            const newCards = lines.map((line, index) => {
+            // 1. Process all lines into cards
+            let newCards = lines.map((line, index) => {
                 // SIMPLE SPLIT: Works best with the "Clean" export format
-                // Splits by comma but handles quotes simply
                 const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                const clean = values.map(v => v.replace(/^"|"$/g, "").trim());
+                
+                // If the split fails or array is empty, default safely
+                const clean = (values || []).map(v => v.replace(/^"|"$/g, "").trim());
 
                 return {
-                    id: Date.now() + "-" + index,
+                    id: Date.now() + "-" + index + "-" + Math.floor(Math.random() * 1000), // Added random key salt to guarantee absolute uniqueness
                     question: clean[0] || "",
                     answer: clean[1] || "",
                     phrase: clean[2] || "",
                     notes: clean[3] || ""
                 };
             });
+
+            // --- THE FIX: Strip out completely blank ghost entries ---
+            newCards = newCards.filter(card => card.question.trim() !== "" || card.answer.trim() !== "");
 
             const deckName = file.name.replace(".csv", "");
             const transaction = db.transaction([STORE_NAME], "readwrite");
@@ -3659,7 +3665,7 @@ function importCSV(event) {
             store.put({ name: deckName, cards: newCards });
 
             transaction.oncomplete = () => {
-                alert("Import Successful!");
+                alert(`Import Successful! Loaded ${newCards.length} clean records.`);
                 renderDecks();
             };
         } catch (err) {
@@ -3669,31 +3675,73 @@ function importCSV(event) {
     };
     reader.readAsText(file, "UTF-8");
 }
-function importJSON(event) {
+*/
+function importCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (e) => {
         try {
-            const data = JSON.parse(e.target.result.trim());
+            let content = e.target.result;
             
+            // Note: We don't indiscriminately convert "" to ' here anymore because 
+            // the column parser splits things cleanly via regex.
+
+            const lines = content.split(/\r?\n/).filter(line => line.trim() !== "");
+            lines.shift(); // Remove headers
+
+            let newCards = lines.map((line, index) => {
+                // Splits lines safely by matching content inside quotes
+                const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                const clean = (values || []).map(v => v.replace(/^"|"$/g, "").trim());
+
+                // Build the baseline card object
+                const card = {
+                    id: Date.now() + "-" + index + "-" + Math.floor(Math.random() * 1000),
+                    question: clean[0] || "",
+                    answer: clean[1] || "",
+                    phrase: clean[2] || "",
+                    notes: clean[3] || ""
+                };
+
+                // --- READ SRS DATA: Check if column 5 contains valid saved scheduling ---
+                const rawSrs = clean[4] || "";
+                if (rawSrs && rawSrs !== "") {
+                    try {
+                        // Put the double quotes back so JSON.parse can read it safely
+                        const standardJsonSyntax = rawSrs.replace(/'/g, '"');
+                        card.srs = JSON.parse(standardJsonSyntax);
+                    } catch (srsErr) {
+                        console.warn("Could not parse SRS data for card row " + index, srsErr);
+                    }
+                }
+
+                return card;
+            });
+
+            // Strip out ghost lines
+            newCards = newCards.filter(card => card.question.trim() !== "" || card.answer.trim() !== "");
+
+            const deckName = file.name.replace(".csv", "");
             const transaction = db.transaction([STORE_NAME], "readwrite");
-            transaction.objectStore(STORE_NAME).add(data);
+            const store = transaction.objectStore(STORE_NAME);
+
+            store.put({ name: deckName, cards: newCards });
 
             transaction.oncomplete = () => {
-                alert("JSON Deck Restored Successfully!");
+                alert(`Import Successful! Loaded ${newCards.length} cards with tracking preservation.`);
                 renderDecks();
             };
         } catch (err) {
-            alert("JSON Error: " + err.message);
+            console.error("Import failed:", err);
+            alert("Check console for error.");
         }
     };
     reader.readAsText(file, "UTF-8");
 }
 
 function exportCurrentDeck() {
-    // 1. Check if a deck is actually active
     if (!currentDeckId) {
         alert("Please select a deck first.");
         return;
@@ -3710,99 +3758,82 @@ function exportCurrentDeck() {
             return;
         }
 
-        // 2. Build the CSV String
-        // Header row matches your importCSV function's shift() call
-        const header = "Question,Answer,Phrase,Notes\n";
+        // --- UPDATED HEADER: Added SRS_Data column ---
+        const header = "Question,Answer,Phrase,Notes,SRS_Data\n";
         
         const csvRows = deck.cards.map(card => {
-            // 1. Clean the data: replace any double quotes with single quotes
-            const cleanQ = (card.question || "").replace(/"/g, "'");
-            const cleanA = (card.answer || "").replace(/"/g, "'");
-            const cleanP = (card.phrase || "").replace(/"/g, "'");
-            const cleanN = (card.notes || "").replace(/"/g, "'");
+            const cleanQ = (card.question || "").replace(/"/g, "'").replace(/[\r\n]+/g, "<br>");
+            const cleanA = (card.answer || "").replace(/"/g, "'").replace(/[\r\n]+/g, "<br>");
+            const cleanP = (card.phrase || "").replace(/"/g, "'").replace(/[\r\n]+/g, "<br>");
+            const cleanN = (card.notes || "").replace(/"/g, "'").replace(/[\r\n]+/g, "<br>");
 
-            // 2. Wrap in simple double quotes for the CSV columns
-            return `"${cleanQ}","${cleanA}","${cleanP}","${cleanN}"`;
+            // --- SAVE SRS DATA: Convert the srs tracking object into a string ---
+            // We swap double quotes to single quotes here so it safely wraps inside the CSV column
+            const srsString = card.srs ? JSON.stringify(card.srs).replace(/"/g, "'") : "";
+
+            return `"${cleanQ}","${cleanA}","${cleanP}","${cleanN}","${srsString}"`;
         }).join("\n");
 
         const csvContent = header + csvRows;
 
-        // --- 3. FALLBACK: Create a copy-paste area with a Copy Button ---
+        // UI Overlay Code
         const container = document.createElement('div');
         container.id = "export-container";
-        container.style.cssText = "position:fixed; top:5%; left:5%; width:90%; height:85%; z-index:10000; background:#fff; border:3px solid #007bff; border-radius:12px; display:flex; flex-direction:column; padding:10px; box-shadow:0 10px 30px rgba(0,0,0,0.5);";
+        container.style.cssText = "position:fixed; top:5%; left:5%; width:90%; height:85%; z-index:10000; background:#fff; border:3px solid #333; border-radius:12px; display:flex; flex-direction:column; padding:10px; box-shadow:0 10px 30px rgba(0,0,0,0.5);";
 
         const copyArea = document.createElement('textarea');
         copyArea.value = csvContent;
         copyArea.style.cssText = "flex:1; width:100%; font-family:monospace; font-size:12px; border:1px solid #ddd; padding:8px; margin-bottom:10px;";
         
-        // The "Copy All" Button
         const copyBtn = document.createElement('button');
         copyBtn.innerText = "📋 COPY ALL TEXT";
-        copyBtn.style.cssText = "width:100%; height:50px; background:#28a745; color:#fff; font-weight:bold; border:none; border-radius:8px; margin-bottom:8px; font-size:16px;";
+        copyBtn.style.cssText = "width:100%; height:50px; background:#222; color:#fff; font-weight:bold; border:none; border-radius:8px; margin-bottom:8px; font-size:16px; cursor:pointer;";
         
         copyBtn.onclick = () => {
             copyArea.select();
-            copyArea.setSelectionRange(0, 99999); // For mobile
+            copyArea.setSelectionRange(0, 99999);
             try {
-                // Modern copy method
                 navigator.clipboard.writeText(copyArea.value);
                 copyBtn.innerText = "✅ COPIED!";
-                copyBtn.style.background = "#155724";
+                copyBtn.style.background = "#555";
                 setTimeout(() => {
                     copyBtn.innerText = "📋 COPY ALL TEXT";
-                    copyBtn.style.background = "#28a745";
+                    copyBtn.style.background = "#222";
                 }, 2000);
             } catch (err) {
-                // Fallback for older iOS versions
                 document.execCommand('copy');
-                alert("Text selected! Use the 'Copy' popup if it appeared.");
+                alert("Text selected!");
             }
         };
 
         const closeBtn = document.createElement('button');
         closeBtn.innerText = "CLOSE";
-        closeBtn.style.cssText = "width:100%; height:40px; background:#6c757d; color:#fff; border:none; border-radius:8px; font-size:14px;";
-        
-        closeBtn.onclick = () => {
-            document.body.removeChild(container);
-        };
+        closeBtn.style.cssText = "width:100%; height:40px; background:#f0f0f0; color:#333; border:1px solid #ccc; border-radius:8px; font-size:14px; cursor:pointer;";
+        closeBtn.onclick = () => document.body.removeChild(container);
 
         container.appendChild(copyBtn);
         container.appendChild(copyArea);
         container.appendChild(closeBtn);
         document.body.appendChild(container);
 
-        // 4. Primary Action: Trigger .csv File Download
         try {
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            
-            // Generate filename: replace spaces with underscores and add .csv
             const safeFileName = `${deck.name.replace(/\s+/g, '_')}.csv`;
-            
             link.setAttribute("href", url);
             link.setAttribute("download", safeFileName);
             link.style.visibility = 'hidden';
-            
             document.body.appendChild(link);
             link.click();
-            
             setTimeout(() => {
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
             }, 100);
-
-            alert("Export complete! If no file saved, copy the text from the box at the top.");
+            alert("Export complete!");
         } catch (err) {
-            console.error("Export download failed, use the text box.", err);
+            console.error("Export download failed", err);
         }
-    };
-
-    request.onerror = (err) => {
-        console.error("Database export error:", err);
-        alert("Failed to retrieve deck from database.");
     };
 }
 function handleSettings(selectElement) {

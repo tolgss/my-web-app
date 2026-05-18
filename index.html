@@ -33,9 +33,6 @@
 			    ">
 			        <label for="import-csv" style="display: block; padding: 12px; cursor: pointer; border-bottom: 1px solid #ddd; color: black;">📥 Import CSV</label>
 			        <input type="file" id="import-csv" accept=".csv" onchange="importCSV(event)" style="display:none">
-			        
-			        <label for="import-json" style="display: block; padding: 12px; cursor: pointer; border-bottom: 1px solid #ddd; color: black;">📥 Import JSON</label>
-			        <input type="file" id="import-json" accept=".json" onchange="importJSON(event)" style="display:none">
 
 			        <div onclick="downloadCSVTemplate()" style="display: block; padding: 12px; cursor: pointer; color: #007bff; font-weight: bold;">📄 Get CSV Template</div>
 			    </div>
@@ -69,7 +66,7 @@
 	        <span style="font-size: 1.2em; cursor: default; filter: grayscale(1);">⚙</span>
 	        <select onchange="handleSettings(this)" style="background: none; border: none; color: #666; font-size: 0.8em; cursor: pointer; outline: none; font-family: sans-serif;">
 	            <option value="" disabled selected>Export Options</option>
-	            <option value="export">Export (JSON)</option>
+	            <option value="export">Export (CSV)</option>
 	        </select>
 	    </div>
 
