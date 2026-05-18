@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>SRSReview</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="view-list">
+    <header style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid #000;">
+        <h3>SRSReview</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button onclick="openAddDeckModal()" style="min-width: 100px; min-height: 44px; padding: 10px; font-size: 14px; border-radius: 8px; cursor: pointer; border: 1px solid #ccc;">
+		        + Add Deck
+		    </button>
+            
+            <div class="dropdown" style="position: relative; display: inline-block;">
+			    <button onclick="event.stopPropagation(); toggleSettingsDropdown()" style="background:none; border:none; font-size: 24px; cursor:pointer;">⚙️</button>
+			    
+			    <div id="settings-menu" style="
+			        display: none; 
+			        position: absolute; 
+			        right: 0px; 
+			        top: 40px; 
+			        background: #ffffff; 
+			        min-width: 180px; 
+			        z-index: 9999; 
+			        border: 2px solid #000; 
+			        box-shadow: 0px 8px 16px rgba(0,0,0,0.2);
+			        color: #000000;
+			        text-align: left;
+			    ">
+			        <label for="import-csv" style="display: block; padding: 12px; cursor: pointer; border-bottom: 1px solid #ddd; color: black;">📥 Import CSV</label>
+			        <input type="file" id="import-csv" accept=".csv" onchange="importCSV(event)" style="display:none">
+			        
+			        <label for="import-json" style="display: block; padding: 12px; cursor: pointer; border-bottom: 1px solid #ddd; color: black;">📥 Import JSON</label>
+			        <input type="file" id="import-json" accept=".json" onchange="importJSON(event)" style="display:none">
+
+			        <div onclick="downloadCSVTemplate()" style="display: block; padding: 12px; cursor: pointer; color: #007bff; font-weight: bold;">📄 Get CSV Template</div>
+			    </div>
+			</div>
+    </header>
+    <div id="deckContainer"></div>
+</div>
+<div id="deckModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+    <div style="background:white; padding:20px; border:2px solid #000; width:80%; max-width:400px;">
+        <h2 id="modalTitle">New Deck</h2>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <input type="text" id="deckInput" placeholder="Deck Name" style="padding:10px; border:1px solid #000;">
+        </div>
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button onclick="closeDeckModal()">Cancel</button>
+            <button onclick="saveDeck()" style="background:#000; color:#fff; padding:5px 15px; touch-action: manipulation;">
+    Save
+</button>
+        </div>
+    </div>
+</div>
+<div id="view-detail" style="display:none; height: 100vh; position: relative;">
+    <header style="display:flex; align-items:center; padding:10px; border-bottom:1px solid #000;">
+        <button onclick="showListView()" style="min-width: 100px; min-height: 44px; padding: 10px; font-size: 14px; border-radius: 8px; cursor: pointer; border: 1px solid #ccc;">
+		    ← Back
+		</button>
+        <h3 id="currentDeckTitle" style="margin-left:20px;">Deck Name</h3>
+    </header>
+    <div id="deckStats" style="padding: 0 20px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+	    <div style="position: relative; display: flex; align-items: center; gap: 5px;">
+	        <span style="font-size: 1.2em; cursor: default; filter: grayscale(1);">⚙</span>
+	        <select onchange="handleSettings(this)" style="background: none; border: none; color: #666; font-size: 0.8em; cursor: pointer; outline: none; font-family: sans-serif;">
+	            <option value="" disabled selected>Export Options</option>
+	            <option value="export">Export (JSON)</option>
+	        </select>
+	    </div>
+
+	    <div style="font-size: 0.85em; color: #28a745; font-weight: bold; background: #eaffef; padding: 4px 12px; border-radius: 15px; border: 1px solid #28a745;">
+	        🏆 Mastered: <span id="masteryCount">0</span>
+	    </div>
+	</div>
+	<div style="padding: 10px; border-bottom: 1px solid #ddd; background: #fff;">
+	    <div style="display: flex; align-items: center; gap: 10px;">
+	        
+	        <div style="flex: 1; display: flex; align-items: center; background: #f0f0f0; border-radius: 8px; padding: 5px 10px;">
+	            <span style="margin-right: 8px;">🔍</span>
+	            <input type="text" id="deckSearchInput" placeholder="Search questions..." 
+	                   oninput="handleDeckSearch(this.value)"
+	                   style="border: none; background: transparent; width: 100%; outline: none; padding: 5px; font-size: 16px;">
+	        </div>
+
+	        <button onclick="openCardModal()" style="background: #000; color: #fff; border: none; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+	            +
+	        </button>
+	    </div>
+	    
+	    <div id="searchResultOverlay" style="
+	        display: none; 
+	        position: absolute; 
+	        top: 60px; left: 10px; right: 10px; 
+	        background: white; 
+	        border: 2px solid #000; 
+	        box-shadow: 0 4px 15px rgba(0,0,0,0.2); 
+	        z-index: 9999; 
+	        max-height: 300px; 
+	        overflow-y: auto;">
+	    </div>
+	</div>
+    <div id="menu-stack" style="display:flex; flex-direction: column; gap:12px; padding:20px;">
+    
+	    <button class="menu-btn-full" onclick="startReview()" style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px;">
+	        <span style="font-weight: bold;">Review</span>
+	        <div id="reviewRemainingSub" style="font-size: 0.7em; color: #666; margin-top: 2px;">Remaining: 0 Cards</div>
+	        <div id="reviewTotalSub" style="font-size: 0.7em; color: #666;">Total: 0 Cards</div>
+	    </button>
+	    
+	    <button id="srsReviewBtn" class="menu-btn-full" onclick="startSRSReview()" ...>
+		    <span style="font-weight: bold;">SRS Review</span>
+		    <div id="srsScheduledSub" style="font-size: 0.7em; color: #666; margin-top: 2px;">Scheduled: 0 Cards</div>
+		    <div id="srsNextLabel"></div> 
+		    <span id="srsBadge" ...>0</span>
+		</button>
+	    <button id="todaysReviewBtn" class="menu-btn-full" onclick="startTodaysReview()" style="display: none; margin-top: 10px; background-color: #f0f0f0; border: 1px solid #ddd;">
+		    <span style="font-weight: bold;">Today's Review</span>
+		    <div id="todaysCountSub" style="font-size: 0.7em; color: #666; margin-top: 2px;">Reviewed Today: 0 Cards</div>
+		</button>
+		<button id="forceLoad20Btn" onclick="startSRSReview(true)" style="
+		    width: 100%; 
+		    margin-top: 12px; 
+		    padding: 15px; 
+		    background: #444; 
+		    color: white; 
+		    border: none; 
+		    border-radius: 8px; 
+		    font-size: 0.95em; 
+		    font-weight: bold;
+		    display: none;
+		    transition: background 0.3s ease;
+		">
+		    Force Load Next 20
+		</button>
+	    <button id="quickRecallBtn" class="menu-btn-full" onclick="startQuickRecall()" style="display: none;">
+		    Quick Recall (<span id="recallBtnCount">0</span>)
+		</button>
+		<button id="randomChallengeBtn" class="menu-btn-full" onclick="startRandomDeckChallenge()">
+		    🎯 Random 20 Challenge
+		</button>
+		<button id="matchBlitzBtn" class="menu-btn-full" onclick="startMatchBlitz()" style="display: none;">
+		    Match Blitz (<span id="matchBtnCount">0</span>)
+		</button>
+	    <button class="menu-btn-full" onclick="toggleCardList()">List</button>
+	</div>
+
+    
+</div>
+
+<div id="modal" style="display:none; position:fixed; top:20%; left:10%; right:10%; background:white; border:2px solid #000; padding:20px; z-index:100;">
+    <h3 id="modalTitle">New Deck</h3>
+    <input type="text" id="deckInput" placeholder="Name" style="width:100%;">
+    <div style="margin-top:10px; display:flex; justify-content:flex-end; gap:10px;">
+        <button onclick="closeModal()">Cancel</button>
+        <button onclick="saveDeck()">Save</button>
+    </div>
+</div>
+
+<div id="cardModal" style="display:none; position:fixed; top:5%; left:5%; right:5%; bottom:5%; background:white; border:2px solid #000; padding:20px; z-index:3000; overflow-y:auto;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3 style="margin:0;">Add New Card</h3>
+        <button type="button" onclick="autoFillDictionary('cardQ', 'cardA', 'cardPhrase', 'cardNotes')" style="background:#000; color:#fff; border:none; padding:8px 15px; border-radius:5px; font-weight:bold; cursor:pointer;">🪄 Fetch Word</button>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <input type="text" id="cardQ" placeholder="Question">
+        <input type="text" id="cardA" placeholder="Answer">
+        
+        <label>Phrase (Supports Arabic/RTL):</label>
+        <div id="cardPhrase" contenteditable="true" dir="auto" style="border:1px solid #000; min-height:80px; padding:5px; background:#fff;"></div>
+        
+        <div id="phraseControls">
+            <button onclick="phraseClear()">Clear</button>
+            <button onclick="phraseHighlight()">Highlight</button>
+            <button onclick="phraseRemoveHighlight()">Remove Highlight</button>
+        </div>
+
+        <label>Meaning/Notes:</label>
+        <textarea id="cardNotes" rows="4"></textarea>
+    </div>
+    
+    <div style="margin-top:15px; display:flex; justify-content:flex-end; gap:10px;">
+        <button onclick="closeCardModal()">Cancel</button>
+        <button onclick="saveCard()">Save Card</button>
+    </div>
+</div>
+
+<div id="editCardModal" style="display:none; position:fixed; top:5%; left:5%; right:5%; bottom:5%; background:white; border:2px solid #000; padding:20px; z-index:102; overflow-y:auto;">
+	<input type="hidden" id="editCardSecretId">
+    <div class="modal-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+            <h2 style="margin:0;">Edit Card</h2>
+            <button type="button" onclick="autoFillDictionary('editQ', 'editA', 'editP', 'editN')" style="background:#000; color:#fff; border:none; padding:8px 15px; border-radius:5px; font-weight:bold; cursor:pointer;">🪄 Fetch Word</button>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <input id="editQ" type="text" placeholder="Question">
+            <input id="editA" type="text" placeholder="Answer">
+            
+            <div class="highlight-tools">
+                <button onclick="editPhraseHighlight()">Highlight</button>
+                <button onclick="editPhraseRemoveHighlight()">Remove Highlights</button>
+            </div>
+            
+            <div id="editP" contenteditable="true" dir="auto" style="border:1px solid #000; min-height:80px; padding:5px; background:#fff;" placeholder="Phrase"></div>
+            
+            <textarea id="editN" placeholder="Notes" rows="4"></textarea>
+        </div>
+
+        <div style="display:flex; justify-content: space-between; margin-top:20px;">
+            <button onclick="deleteCurrentCard()" style="background-color:#ff4d4d; color:white; border:none; padding:10px; border-radius:5px;">Delete Card</button>
+            
+            <div style="display:flex; gap:10px;">
+                <button onclick="updateExistingCard()">Update</button>
+                <button onclick="closeEditModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="view-review" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:50;">
+    <header style="display:flex; flex-direction: column; align-items:center; gap:8px; padding:12px 15px; border-bottom:1px solid #eee; background:#fff; flex-shrink: 0;">
+
+	    <div style="display:flex; gap:18px; align-items:center; justify-content:center; width:100%;">
+	        <span onclick="changeFontSize(-1)" style="cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#aaa; font-weight: bold; user-select: none;">A-</span>
+	        <span onclick="changeFontSize(1)" style="cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#aaa; font-weight: bold; user-select: none;">A+</span>
+	        <span id="alignToggleBtnStandard" onclick="toggleAlignment()" style="cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:25px; color:#aaa; user-select: none;">≡</span>
+
+	        <button onclick="toggleScheduleFlash()" title="Flash Schedule" style="border:none; background:none; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:16px; cursor:pointer; color:#ffd700;">⚡</button>
+	        <button onclick="resetSchedule()" title="Clear all scheduled" style="border:none; background:none; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer; color:#ff4d4d;">⊘</button> 
+	        <button onclick="reviewEditCurrent()" title="Edit Card" style="border:none; background:none; width:32px; height:32px; display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; color:#666;">✎</button>
+	        
+	        <button onclick="exitReviewToDetail()" title="Exit" style="border:none; background:none; width:38px; height:38px; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; color:#333; margin-left:2px;">✕</button>
+	    </div>
+
+	    <div style="display:flex; gap:12px; justify-content:center; width:100%;">
+	        <button onclick="reviewPrevChunk()" title="Previous Chunk" style="border:none; background:#f0f0f0; border-radius:8px; width:45px; height:38px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px;">⟵</button>
+	        <button onclick="reviewReset()" title="Reset to Start" style="border:none; background:#f0f0f0; border-radius:8px; width:45px; height:38px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:20px;">⟳</button>
+	        <button onclick="reviewNextChunk()" title="Next Chunk" style="border:none; background:#f0f0f0; border-radius:8px; width:45px; height:38px; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:16px;">⟶</button>
+	    </div>
+
+	</header>
+
+    <div style="padding:10px; overflow: visible;">
+        <div style="width:100%; height:15px; background:#eee;">
+            <div id="progressBarContainer" style="width:100%; height:15px; border:1px solid #000; background:#eee; display:flex; margin-bottom: 5px;">
+    		</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:5px;">
+            <span id="inspectedQty">Inspected: 0</span>
+            <span id="pendingQty">Pending: 0</span>
+        </div>
+    </div>
+
+    <div style="display:flex; justify-content:center; align-items:center; gap:20px; padding:10px;">
+        <button onclick="adjustChunkSize(-1)" style="font-size:20px;">-</button>
+        <span id="cardCounterLabel" style="font-size:18px; font-weight:bold;">Card 1 / 20</span>
+        <button onclick="adjustChunkSize(1)" style="font-size:20px;">+</button>
+    </div>
+
+    <div id="reviewContentArea" style="flex: 1; height: 500px; border:1px solid #ccc; position:relative; margin:10px; overflow: hidden; display: flex; flex-direction: column;">
+    
+	    <div id="reviewData" style="width:100%; height:100%; padding:20px; box-sizing: border-box; overflow-y:auto; -webkit-overflow-scrolling: touch; z-index: 5; text-align: center;">
+	        <h2 id="revQ"></h2>
+	        <p id="revA" style="color:blue; font-size: 20px; font-weight: bold;"></p>
+	        
+	        <div id="revP" style="border:1px dashed #ccc; padding:10px; margin:10px 0; height: 200px; overflow-y: auto; text-align:left; -webkit-overflow-scrolling: touch; word-wrap: break-word;"></div>
+
+	        <p id="revN" style="font-style:italic; color:#555; text-align:left; height: 100px; overflow-y: auto; -webkit-overflow-scrolling: touch; word-wrap: break-word; white-space: pre-wrap;"></p>
+	        
+	        <div style="height: 100px;"></div>
+	    </div>
+
+	    <div id="nav-left" onclick="prevCardInChunk()" style="width:35%; height:100%; position:absolute; left:0; top:0; z-index:10; background: transparent;"></div>
+
+		<div id="nav-right" onclick="nextCardInChunk()" style="width:35%; height:100%; position:absolute; right:0; top:0; z-index:10; background: transparent;"></div>
+
+	</div>
+</div>
+<div id="srsModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; align-items:center; justify-content:center;">
+    <div style="position:relative; width:90%; max-width:400px; height: 95vh; background:#fff; border-radius:10px; overflow:hidden; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        
+        <div id="srsActionBars" style="position:absolute; top:10px; right:15px; z-index: 2010; display: flex; align-items: center; gap: 2px;">
+            <span onclick="changeFontSize(-1)" style="cursor:pointer; font-size:18px; color:#aaa; padding: 5px; font-weight: bold; user-select: none;">A-</span>
+            <span onclick="changeFontSize(1)" style="cursor:pointer; font-size:18px; color:#aaa; padding: 5px; font-weight: bold; user-select: none;">A+</span>
+            <span id="alignToggleBtn" onclick="toggleAlignment()" title="Toggle Alignment" style="cursor:pointer; font-size:30px; color:#aaa; padding: 5px; user-select: none; font-weight: bold;">≡</span>
+            <span onclick="shuffleSRSSession()" title="Shuffle" style="cursor:pointer; font-size:18px; color:#aaa; padding: 5px; user-select: none; filter: grayscale(1);">🔀</span>
+            <span onclick="editSRSCard()" style="cursor:pointer; font-size:18px; color:#aaa; padding: 5px; user-select: none;">✏️</span>
+            <span onclick="closeSRSModal()" style="cursor:pointer; font-size:24px; color:#aaa; padding: 5px; user-select: none; line-height: 1;">&times;</span>
+        </div>
+
+        <div id="srsModalContent" style="position:relative; padding:60px 20px 30px 20px; flex: 1; overflow-y: auto; text-align:center; -webkit-overflow-scrolling: touch;">
+            <div id="srsCounter" style="position: absolute; top: 15px; left: 15px; z-index: 5; touch-action: manipulation; -webkit-user-select: none;">
+  			</div>
+            <h2 id="srsQ" style="margin:0 0 15px 0; font-size: 1.5em; word-wrap: break-word;"></h2>
+            <div style="height:1px; background:#eee; width:80%; margin:10px auto;"></div>
+            <p id="srsA" style="font-weight:bold; color:#007bff; font-size: 1.2em; margin:15px 0; word-wrap: break-word;"></p>
+            <p id="srsP" style="text-align:left; font-style:italic; color:#555; margin:5px 0; word-wrap: break-word;"></p>
+            <p id="srsN" style="text-align:left; color:#888; font-size:0.9em; margin:10px 0; white-space: pre-wrap; word-wrap: break-word;"></p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; height: 140px; border-top: 1px solid #eee; background: #fff; flex-shrink: 0;">
+            
+            <div style="display: flex; flex: 1; border-bottom: 1px solid #f0f0f0;">
+                <div onclick="adjustSRSInterval(-1)" style="flex:1; display:flex; align-items:center; justify-content:center; cursor:pointer; background: #fdfdfd; font-size: 24px; color: #bbb; border-right: 1px solid #f0f0f0; user-select: none;">−</div>
+                
+                <div id="srsWheelDisplay" onclick="handleSRSClick('stay')" style="flex:1.5; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight: bold; background: #fff; cursor: pointer;">
+                    <div id="modalIntervalText" style="font-size: 1.1em; color: #007bff;">1d</div>
+                    <div style="font-size: 0.6em; color: #aaa; text-transform: uppercase; letter-spacing: 1px;">Confirm</div>
+                </div>
+
+                <div onclick="adjustSRSInterval(1)" style="flex:1; display:flex; align-items:center; justify-content:center; cursor:pointer; background: #fdfdfd; font-size: 24px; color: #bbb; border-left: 1px solid #f0f0f0; user-select: none;">+</div>
+	            </div>
+
+	            <div style="display: flex; flex: 1; background: #f9f9f9; -webkit-user-select: none;">
+	    
+			    <div id="srs-btn-prev" onclick="handleSRSClick('prev')" 
+			         style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; border-right:1px solid #eee; transition: background 0.1s ease; touch-action: manipulation;">
+			        <span style="font-size: 1.5em; color: #333;">&#10229;</span>
+			        <span id="modalPrevLabel" style="font-size: 0.75em; color: #666;"></span>
+			    </div>
+			    
+			    <div id="srs-btn-next" onclick="handleSRSClick('next')" 
+			         style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition: background 0.1s ease; touch-action: manipulation;">
+			        <span style="font-size: 1.5em; color: #333;">&#10230;</span>
+			        <span id="modalNextLabel" style="font-size: 0.75em; color: #666;"></span>
+			    </div>
+
+			</div>
+        </div>
+
+        <div style="width:100%; height:45px; display:flex; background:#222; position:relative; flex-shrink: 0; -webkit-user-select: none;">
+		    <div onclick="loopSRS(-1)" style="flex:1; display:flex; align-items:center; justify-content:center; border-right: 1px solid #444; color:rgba(255,255,255,0.4); font-size:12px;">
+		        BACK
+		    </div>
+		    
+		    <div style="position:absolute; width:100%; height:100%; display:flex; align-items:center; justify-content:center; pointer-events:none; color:white; font-weight:bold; letter-spacing:1px; text-transform: uppercase; font-size:13px;">
+		        LOOP
+		    </div>
+
+		    <div onclick="loopSRS(1)" style="flex:1; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.4); font-size:12px;">
+		        SKIP
+		    </div>
+		</div>
+    </div>
+</div>
+<!-- Today's Review View (Read-Only) -->
+<div id="todayReviewModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2500; align-items:center; justify-content:center;">
+    <div style="position:relative; width:90%; max-width:400px; height: 95vh; background:#fff; border-radius:10px; overflow:hidden; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        
+        <!-- Header: Grayish Counter & Toggle -->
+        <div style="position:absolute; top:0; left:0; right:0; height: 60px; z-index: 2010; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: #fff; border-bottom: 1px solid #f9f9f9;">
+            
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <!-- Grayish Progress Counter -->
+                <div id="todayCounter" style="font-family: monospace; font-size: 0.9em; font-weight: bold; color: #666; background: #f0f0f0; padding: 4px 12px; border-radius: 6px; letter-spacing: 0.5px; border: 1px solid #ddd;">20 Left</div>
+
+                <!-- Grayish Auto-Reveal Toggle -->
+                <div style="display: flex; align-items: center; gap: 6px; background: #f8f9fa; padding: 4px 10px; border-radius: 20px; border: 1px solid #e9ecef;">
+                    <span style="font-size: 10px; color: #888; font-weight: bold; letter-spacing: 0.5px;">AUTO-REVEAL</span>
+                    <input type="checkbox" id="todayToggleDirect" style="width:14px; height:14px; cursor:pointer; accent-color: #666;" onchange="renderTodayCard()">
+                </div>
+            </div>
+
+            <span onclick="closeTodayReview()" style="cursor:pointer; font-size:32px; color:#ccc; user-select: none; line-height: 1; padding: 5px;">&times;</span>
+        </div>
+
+        <!-- Content Area -->
+        <div style="position:relative; margin-top:60px; padding:20px 25px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
+            <div style="width: 100%;">
+                <!-- Question: Font Size Reduced to 1.3em -->
+                <h2 id="todayQ" style="margin:0 0 20px 0; font-size: 1.3em; color: #333; word-wrap: break-word; line-height: 1.2;"></h2>
+                
+                <div id="todayDetails" style="visibility: hidden; width: 100%;">
+                    <div style="height:1px; background:#f0f0f0; width:60%; margin:15px auto;"></div>
+                    
+                    <!-- Answer: Changed from Blue to Black -->
+                    <p id="todayA" style="font-weight:bold; color:#000; font-size: 1.4em; margin:10px 0; word-wrap: break-word;"></p>
+                    
+                    <p id="todayP" style="font-style:italic; color:#666; font-size: 1em; margin:10px 0; display:none;"></p>
+                    <p id="todayPr" style="color:#999; font-size: 0.9em; margin:5px 0;"></p>
+                    <p id="todayN" style="color:#888; font-size:0.9em; margin:15px 0; background: #fcfcfc; padding: 10px; border-radius: 8px;"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Action Button: Logic sets background to Gray for "NEXT" -->
+        <div style="height: 100px; border-top: 1px solid #f0f0f0; background: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <button id="todayMainBtn" onclick="handleTodayAction()" style="width: 85%; height: 60px; background: #333; color: white; border: none; border-radius: 12px; font-weight: bold; font-size: 1.15em; cursor: pointer; transition: 0.2s;">
+                SHOW ANSWER
+            </button>
+        </div>
+
+        <!-- Footer Navigation -->
+        <div style="width:100%; height:50px; display:flex; background:#f8f9fa; position:relative; flex-shrink: 0; border-top: 1px solid #eee;">
+            <div onclick="moveTodayIdx(-1)" style="flex:1; display:flex; align-items:center; justify-content:center; border-right: 1px solid #eee; color:#aaa; font-size:11px; cursor: pointer; font-weight: bold;">BACK</div>
+            <div style="position:absolute; width:100%; height:100%; display:flex; align-items:center; justify-content:center; pointer-events:none; color:#ddd; font-weight:bold; font-size:11px; letter-spacing: 2px;">RECAP</div>
+            <div onclick="moveTodayIdx(1)" style="flex:1; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; cursor: pointer; font-weight: bold;">SKIP</div>
+        </div>
+    </div>
+</div>
+<div id="recallModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #ffffff; z-index: 10000; flex-direction: column;">
+    
+    <!-- Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee;">
+        <div style="display: flex; flex-direction: column;">
+            <h3 style="margin: 0; color: #888; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px;">Quick Recall</h3>
+            <!-- THE TOGGLE -->
+            <label style="font-size: 10px; color: #007bff; font-weight: bold; margin-top: 4px; display: flex; align-items: center; gap: 5px;">
+                <input type="checkbox" id="recallModeToggle" onchange="renderRecallCard()" style="margin:0;"> Switch Mode
+            </label>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span id="recallCounter" style="color: #444; font-weight: bold; font-size: 1em;">0/0</span>
+            <button onclick="closeQuickRecall()" style="border:none; background:none; font-size:32px; cursor:pointer; color:#ccc; line-height: 1;">&times;</button>
+        </div>
+    </div>
+    
+    <!-- Body -->
+    <div style="flex-grow: 1; display: flex; flex-direction: column; justify-content: center; padding: 20px; text-align: center;">
+        
+        <!-- Target Area (Reduced Font Size) -->
+        <div style="margin-bottom: 30px;">
+            <div id="recallPhrase" style="font-style: italic; color: #aaa; margin-bottom: 8px; font-size: 13px; min-height: 18px;"></div>
+            <p id="recallQuestion" style="font-size: 1.4em; color: #000; margin: 0; font-weight: 600; line-height: 1.3;">
+                Loading...
+            </p>
+        </div>
+
+        <!-- Selection Options -->
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <button id="recallOptionA" onclick="handleRecallSelection(0)" 
+                style="width: 100%; min-height: 70px; font-size: 1.05em; cursor: pointer; color: #333; background: #f4f4f4; border: 1px solid #ddd; border-radius: 12px; padding: 12px; transition: background 0.2s;">
+                Option A
+            </button>
+            
+            <button id="recallOptionB" onclick="handleRecallSelection(1)" 
+                style="width: 100%; min-height: 70px; font-size: 1.05em; cursor: pointer; color: #333; background: #f4f4f4; border: 1px solid #ddd; border-radius: 12px; padding: 12px; transition: background 0.2s;">
+                Option B
+            </button>
+        </div>
+    </div>
+</div>
+<div id="matchModal" class="modal-overlay" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; justify-content: center; align-items: center; padding: 10px;">
+    <div class="modal-content" style="width: 100%; max-width: 600px; background: #1a1a1a; padding: 25px; border-radius: 12px; color: white; box-sizing: border-box; position: relative; border: 1px solid #333;">
+        
+        <button onclick="closeMatchBlitz()" style="position:absolute; top:10px; right:15px; border:none; background:none; font-size:28px; cursor:pointer; color:#666;">&times;</button>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px; padding-right: 35px;">
+            <h3 style="margin: 0;">Match Blitz</h3>
+            <span id="matchProgress" style="color: #888; font-family: monospace;"></span>
+        </div>
+
+        <div id="matchGrid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch;">
+            </div>
+    </div>
+</div>
+<!-- Card List Modal -->
+<div id="cardListModal" style="display:none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 10000; flex-direction: column; padding: 0; box-sizing: border-box;">
+    
+    <!-- Sticky Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #ddd; background: #f9f9f9;">
+        <h3 style="margin:0;">Cards (<span id="cardCount">0</span>)</h3>
+        <button onclick="closeCardListModal()" style="padding: 10px 20px; background: #000; color: #fff; border: none; border-radius: 5px; font-weight: bold;">CLOSE</button>
+    </div>
+
+    <!-- Navigation & Controls -->
+    <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <label style="display: flex; align-items: center; gap: 5px; font-size: 14px;">
+            <input type="checkbox" id="shuffleCardsToggle" onchange="resetAndRenderList()"> Shuffle
+        </label>
+        <button onclick="scrollList('top')" style="padding: 5px 8px;">Top</button>
+        
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 5px;">
+            <button onclick="changeListPage(-1)" style="padding: 5px 10px;">Prev</button>
+            <span id="pageIndicator" style="font-size: 12px; font-weight: bold; min-width: 40px; text-align: center;">1/1</span>
+            <button onclick="changeListPage(1)" style="padding: 5px 10px;">Next</button>
+        </div>
+    </div>
+
+    <!-- Scrollable Rows Container -->
+    <div id="cardRowsContainer" style="overflow-y: auto; flex-grow: 1; padding: 10px; -webkit-overflow-scrolling: touch;">
+        <!-- Rows will be injected here -->
+    </div>
+</div>
+    <script src="scripts.js?v=3"></script>
+    
+</body>
+</html>

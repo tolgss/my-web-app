@@ -1,0 +1,46 @@
+body {
+    font-family: sans-serif;
+    padding: 20px;
+    margin: 0;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+#deckContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.deck-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 15px;
+    border: 1px solid #ccc;
+    background: #fff;
+    width: 90%;
+    text-align: left;
+    cursor: pointer;
+}
+
+.btn-edit {
+    margin-left: 10px;
+    font-size: 0.8em;
+}
+.menu-btn-full {
+    width: 100%;
+    padding: 18px;
+    font-size: 18px;
+    font-weight: bold;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.menu-btn-full:active { background: #f0f0f0; }
