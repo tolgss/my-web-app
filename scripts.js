@@ -208,49 +208,7 @@ function renderDecks() {
         });
     };
 }
-/*
-function updateDeckStats(deck) {
-    const now = Date.now();
-    if (!deck || !deck.cards) return;
 
-    // Filter Logic
-    const due = deck.cards.filter(c => c.srs && !c.srs.mastered && now >= (c.srs.nextReview || 0));
-    
-    // The "Waiting" batch (1.5 hour window)
-    const postponed = deck.cards.filter(c => 
-        c.srs && !c.srs.mastered && 
-        (c.srs.nextReview > now && c.srs.nextReview <= (now + 5400000))
-    );
-
-    // Everything else (Weeks/Months away)
-    const future = deck.cards.filter(c => 
-        c.srs && !c.srs.mastered && (c.srs.nextReview > (now + 5400000))
-    );
-
-    
-    // --- STANDARD UI UPDATE ---
-    const srsSub = document.getElementById('srsScheduledSub');
-    if (srsSub) {
-        srsSub.innerHTML = `Due: ${due.length} | Waiting: ${postponed.length}`;
-    }
-    
-    const nextLabel = document.getElementById('srsNextLabel');
-    if (nextLabel) {
-        if (postponed.length > 0) {
-            nextLabel.innerText = `Next Batch: ~1h (${postponed.length})`;
-        } else if (future.length > 0) {
-            const sortedFuture = future.sort((a,b) => a.srs.nextReview - b.srs.nextReview);
-            const diffMin = Math.round((sortedFuture[0].srs.nextReview - now) / 60000);
-            nextLabel.innerText = `Next: ${diffMin}m (1)`;
-        }
-    }
-
-    const forceBtn = document.querySelector('button[onclick="startSRSReview(true)"]');
-    if (forceBtn) {
-        forceBtn.style.display = postponed.length > 0 ? 'block' : 'none';
-    }
-}
-*/
 function updateDeckStats(deck) {
     const now = Date.now();
     if (!deck || !deck.cards) return;
@@ -272,159 +230,7 @@ function updateDeckStats(deck) {
         forceBtn.style.display = postponed.length > 0 ? 'block' : 'none';
     }
 }
-/*
-function openDeckDetail(id, name) {
-    currentDeckId = id;
-    document.getElementById('currentDeckTitle').innerText = name;
 
-    const transaction = db.transaction([STORE_NAME], 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.get(id);
-
-    request.onsuccess = () => {
-        const deck = request.result;
-        if (!deck) {
-            console.error("Deck not found in IndexedDB");
-            return;
-        }
-
-        // --- GLOBAL ASSIGNMENT ---
-        currentDeck = deck; 
-        reviewCards = deck.cards || [];
-
-        // --- NEW: UPDATE SRS STATS & BUTTONS ---
-        // This calculates the Postponed vs Due counts and toggles the Force Load button
-        updateDeckStats(deck);
-
-        // Session recovery
-        if (deck.session) {
-            recallQueue = deck.session.recallQueue || [];
-            matchQueue = deck.session.matchQueue || [];
-            currentChunkStart = deck.session.currentChunkStart || 0;
-            chunkIndex = deck.session.chunkIndex || 0;
-            chunkSize = deck.session.chunkSize || 20;
-        } else {
-            recallQueue = [];
-            matchQueue = [];
-            currentChunkStart = 0;
-            chunkIndex = 0;
-            chunkSize = (reviewCards.length > 20) ? 20 : reviewCards.length;
-        }
-
-        // UI Reset
-        const pb = document.getElementById('progressBarContainer');
-        if (pb) { 
-            pb.innerHTML = ''; 
-            pb.dataset.lastChunk = ""; 
-        }
-
-        updateReviewUI();
-        
-        // Navigation
-        document.getElementById('view-list').style.display = 'none';
-        document.getElementById('view-detail').style.display = 'block';
-        
-        console.log("✅ Deck Loaded:", currentDeck.title || currentDeck.name || "Untitled Deck");
-    };
-}
-*/
-/*
-function openDeckDetail(id, name) {
-    currentDeckId = id;
-    document.getElementById('currentDeckTitle').innerText = name;
-
-    // Reset queues immediately so old deck data doesn't leak
-    recallQueue = [];
-    matchQueue = [];
-    window.todaysCardsList = [];
-
-    const transaction = db.transaction([STORE_NAME], 'readonly');
-    const store = transaction.objectStore(STORE_NAME);
-    const request = store.get(id);
-
-    request.onsuccess = () => {
-        const deck = request.result;
-        if (!deck) {
-            console.error("Deck not found in IndexedDB");
-            return;
-        }
-
-        currentDeck = deck; 
-        reviewCards = deck.cards || [];
-
-        // --- IMPROVED: TODAY'S REVIEW CALCULATION ---
-        const startOfTodayTs = new Date().setHours(0, 0, 0, 0);
-
-        const reviewedToday = reviewCards.filter(c => {
-            if (!c.srs || !c.srs.nextReview) return false;
-            
-            const level = c.srs.level || 0;
-            const intervalMs = (SRS_INTERVALS[level] || 5) * 60 * 1000;
-            const estimatedLastReview = c.srs.nextReview - intervalMs;
-
-            // Strict check: must be touched today
-            return estimatedLastReview >= startOfTodayTs;
-        });
-        
-        // Explicitly set the global list to our filtered result
-        window.todaysCardsList = reviewedToday; 
-
-        const trBtn = document.getElementById('todaysReviewBtn');
-        const trSub = document.getElementById('todaysCountSub');
-        
-        if (trBtn && trSub) {
-            // Check length against total deck to prevent the 1860 error
-            if (window.todaysCardsList.length > 0 && window.todaysCardsList.length < reviewCards.length) {
-                trBtn.style.display = 'block';
-                trSub.innerText = `Reviewed Today: ${window.todaysCardsList.length} Cards`;
-            } else if (window.todaysCardsList.length >= reviewCards.length && reviewCards.length > 0) {
-                // If it somehow matches the whole deck, it's likely an error; hide it
-                console.warn("Filtered list matches whole deck. Hiding Today Review button.");
-                trBtn.style.display = 'none';
-            } else {
-                trBtn.style.display = 'none';
-            }
-        }
-        // ---------------------------------------
-
-        updateDeckStats(deck);
-
-        // Session recovery
-        if (deck.session) {
-            // Deduplicate incoming session cards to prevent the "40 cards" recall bug
-            const uniqueRecall = new Map();
-            (deck.session.recallQueue || []).forEach(c => uniqueRecall.set(c.question, c));
-            recallQueue = Array.from(uniqueRecall.values());
-
-            const uniqueMatch = new Map();
-            (deck.session.matchQueue || []).forEach(c => uniqueMatch.set(c.question, c));
-            matchQueue = Array.from(uniqueMatch.values());
-
-            currentChunkStart = deck.session.currentChunkStart || 0;
-            chunkIndex = deck.session.chunkIndex || 0;
-            chunkSize = deck.session.chunkSize || 20;
-        } else {
-            currentChunkStart = 0;
-            chunkIndex = 0;
-            chunkSize = (reviewCards.length > 20) ? 20 : reviewCards.length;
-        }
-
-        const pb = document.getElementById('progressBarContainer');
-        if (pb) { 
-            pb.innerHTML = ''; 
-            pb.dataset.lastChunk = ""; 
-        }
-
-        // CRITICAL: Ensure updateReviewUI uses window.todaysCardsList.length for its labels
-        updateReviewUI();
-        
-        document.getElementById('view-list').style.display = 'none';
-        document.getElementById('view-detail').style.display = 'block';
-        
-        console.log("✅ Deck Loaded. Today's Count:", window.todaysCardsList.length);
-    };
-}
-*/
 function openDeckDetail(id, name) {
     currentDeckId = id;
     document.getElementById('currentDeckTitle').innerText = name;
@@ -525,21 +331,7 @@ async function showListView() {
     
     renderDecks();
 }
-/*
-function exitReviewToDetail() {
-    // 1. Save progress before leaving
-    saveSession();
 
-    // 2. Hide the review session
-    document.getElementById('view-review').style.display = 'none';
-    
-    // 3. Show the deck detail screen
-    document.getElementById('view-detail').style.display = 'block';
-
-    // 4. Update the badge count for the SRS Review button
-    updateSRSBadge();
-}
-*/
 function exitReviewToDetail() {
     // 1. Save progress before leaving
     window.currentViewMode = "none";
@@ -906,25 +698,7 @@ function saveCard() {
             console.log("✅ New card created with ID:", newCard.id);
         };
     };
-    /*
-    transaction.oncomplete = () => {
-        closeCardModal();
-        isUpdating = false; 
-
-        var srsModal = document.getElementById('srsModal');
-        var standardReview = document.getElementById('view-review');
-
-        if (srsModal && srsModal.style.display !== 'none') {
-            if (typeof renderSRSReview === "function") renderSRSReview();
-        } 
-        else if (standardReview && standardReview.style.display !== 'none') {
-            updateReviewUI();
-        } 
-        else {
-            renderDecks();
-        }
-    };
-    */
+    
     transaction.oncomplete = () => {
         closeCardModal();
         isUpdating = false; 
@@ -1051,308 +825,6 @@ function startReview() {
     };
 }
 
-/*
-function updateReviewUI() {
-    console.log("!!! VERSION 11 - IF YOU SEE THIS, CODE UPDATED !!!");
-    // DIAGNOSTIC LOGS
-    console.log("🕵️ UI Sync - reviewCards length:", reviewCards ? reviewCards.length : "NULL");
-    if (reviewCards && reviewCards.length > 0) {
-        console.log("🕵️ First Card Question:", reviewCards[0].question);
-        console.log("🕵️ First Card SRS Object:", reviewCards[0].srs);
-    }
-
-    // 1. Ensure the UI is looking at the deck that HAS the SRS data
-    if (currentDeck && currentDeck.cards) {
-        reviewCards = currentDeck.cards; 
-    }
-
-    const scrollContainer = document.getElementById('reviewData');
-    if (scrollContainer) scrollContainer.scrollTop = 0;
-
-    // 2. Prevent rendering if no cards exist
-    if (!reviewCards || reviewCards.length === 0) return;
-
-    // --- 2. Main Card Content Area ---
-    const actualCardIndex = currentChunkStart + chunkIndex;
-    const card = reviewCards[actualCardIndex] || reviewCards[0];
-    console.log(`🎴 Rendering Card Index: ${actualCardIndex}`);
-
-    if (document.getElementById('revQ')) document.getElementById('revQ').innerText = card.question;
-    if (document.getElementById('revA')) document.getElementById('revA').innerText = card.answer;
-    if (document.getElementById('revP')) document.getElementById('revP').innerHTML = card.phrase || "";
-    if (document.getElementById('revN')) document.getElementById('revN').innerText = card.notes || "";
-    if (document.getElementById('cardCounterLabel')) {
-        document.getElementById('cardCounterLabel').innerText = `Card ${chunkIndex + 1} / ${chunkSize}`;
-    }
-
-    // --- 3. Standard Review Labels ---
-    const totalCards = reviewCards.length;
-    const remainingCount = reviewCards.filter(c => !c.srs).length;
-
-    const remSub = document.getElementById('reviewRemainingSub');
-    const totSub = document.getElementById('reviewTotalSub');
-    if (remSub) remSub.innerText = `Remaining: ${remainingCount} Cards`;
-    if (totSub) totSub.innerText = `Total: ${totalCards} Cards`;
-
-    // --- 4. UPDATED PROGRESS BAR ---
-    const pbContainer = document.getElementById('progressBarContainer');
-    if (pbContainer) {
-        const totalScheduled = reviewCards.filter(c => c.srs !== null && c.srs !== undefined).length;
-        const scheduledPercent = (totalScheduled / totalCards) * 100;
-        console.log(`🎨 Progress Bar Calculation: ${totalScheduled} scheduled (${scheduledPercent.toFixed(2)}%)`);
-
-        pbContainer.style.cssText = `
-            position: relative; width: 100%; height: 18px; margin: 15px 0;
-            border: 1px solid #333; box-sizing: border-box;
-            background: -webkit-linear-gradient(left, yellow ${scheduledPercent}%, #28a745 ${scheduledPercent}%);
-            background: linear-gradient(to right, yellow ${scheduledPercent}%, #28a745 ${scheduledPercent}%);
-            overflow: visible; display: block; z-index: 100;
-        `;
-        pbContainer.innerHTML = ''; 
-
-        const totalChunks = Math.ceil(totalCards / chunkSize);
-        const activeChunkIndex = Math.floor(currentChunkStart / chunkSize);
-
-        for (let i = 0; i < totalChunks; i++) {
-            const segmentStart = i * chunkSize;
-            const segmentWidth = (Math.min(chunkSize, totalCards - segmentStart) / totalCards) * 100;
-            
-            const chunkBox = document.createElement('div');
-            chunkBox.style.cssText = `
-                width: ${segmentWidth}%; height: 100%; float: left;
-                position: relative; box-sizing: border-box;
-                background: transparent; 
-            `;
-
-            if (i === activeChunkIndex) {
-                chunkBox.setAttribute('data-active', 'true');
-                chunkBox.style.border = "1.5px solid rgba(0, 0, 0, 0.4)"; 
-                chunkBox.style.backgroundColor = "rgba(255, 255, 255, 0.15)";
-                chunkBox.style.zIndex = "110";
-                
-                const marker = document.createElement('div');
-                marker.style.cssText = `
-                    position: absolute; bottom: 100%; left: 50%;
-                    margin-bottom: 5px; width: 0; height: 0;
-                    border-left: 7px solid transparent;
-                    border-right: 7px solid transparent;
-                    border-top: 10px solid #000;
-                    transform: translateX(-50%);
-                    -webkit-transform: translateX(-50%);
-                    z-index: 1000;
-                `;
-                chunkBox.appendChild(marker);
-            } else {
-                chunkBox.style.borderRight = "1px solid rgba(0,0,0,0.1)";
-            }
-            pbContainer.appendChild(chunkBox);
-        }
-
-        const clear = document.createElement('div');
-        clear.style.clear = "both";
-        pbContainer.appendChild(clear);
-    }
-    
-    
-    // --- 5. SRS Scheduled Button Logic ---
-    const now = Date.now();
-    const activeSRS = reviewCards.filter(c => c.srs && c.srs.mastered !== true);
-    const dueCards = activeSRS.filter(c => now >= (c.srs.nextReview || 0));
-    const dueCount = dueCards.length; 
-    
-    const srsBtn = document.getElementById('srsReviewBtn');
-    if (srsBtn) {
-        let statusHTML = "";
-        if (dueCount > 0) {
-            statusHTML = `<span style="color: #ff4444; font-weight: bold;">${dueCount} Due Now</span>`;
-        } else {
-            const upcoming = activeSRS.filter(c => (c.srs.nextReview || 0) > now)
-                                     .sort((a, b) => a.srs.nextReview - b.srs.nextReview);
-            
-            if (upcoming.length > 0) {
-                const waitingBatch = upcoming.filter(c => (c.srs.nextReview - now) <= 5400000).length;
-                if (waitingBatch > 0) {
-                    statusHTML = `Next Batch: ~1h (${waitingBatch})`;
-                } else {
-                    const soonestMin = Math.ceil((upcoming[0].srs.nextReview - now) / 60000);
-                    statusHTML = `Next: ${soonestMin}m (1)`;
-                }
-            } else {
-                statusHTML = `All caught up`;
-            }
-        }
-
-        srsBtn.innerHTML = `
-            <div style="font-weight: bold; font-size: 1.1em; margin-bottom: 2px;">Scheduled</div>
-            <div style="display: flex; justify-content: center; gap: 8px; font-size: 0.7em; color: #666; margin-top: 2px;">
-                <span>Total: ${activeSRS.length}</span>
-                <span style="opacity: 0.5;">|</span>
-                <span>${statusHTML}</span>
-            </div>
-        `;
-    }
-
-    // --- 6. Quick Recall & Match Blitz Visibility ---
-    const qrBtn = document.getElementById('quickRecallBtn');
-    const mbBtn = document.getElementById('matchBlitzBtn');
-    if (qrBtn) {
-        qrBtn.style.display = (typeof recallQueue !== 'undefined' && recallQueue.length > 0) ? 'block' : 'none';
-        qrBtn.innerText = `Quick Recall (${recallQueue ? recallQueue.length : 0})`;
-    }
-    if (mbBtn) {
-        mbBtn.style.display = (typeof matchQueue !== 'undefined' && matchQueue.length > 0) ? 'block' : 'none';
-        mbBtn.innerText = `Match Blitz (${matchQueue ? matchQueue.length : 0})`;
-    }
-
-    // --- 7. Update Scheduled & Pending Labels ---
-    const srsQtyEl = document.getElementById('inspectedQty'); 
-    const penQtyEl = document.getElementById('pendingQty');
-    if (srsQtyEl && penQtyEl) {
-        const scheduledCount = reviewCards.filter(c => c.srs !== null && c.srs !== undefined).length;
-        const pendingCount = reviewCards.length - scheduledCount;
-        srsQtyEl.innerHTML = `<span style="color: #d4af37; font-weight: bold;">Scheduled: ${scheduledCount}</span>`;
-        penQtyEl.innerHTML = `<span style="color: #28a745; font-weight: bold;">Pending: ${pendingCount}</span>`;
-    }
-
-    // CRITICAL FIX: Removed saveSession() loop to prevent overwriting progress with empty state
-    if (typeof applySavedAlignment === 'function') applySavedAlignment();
-    if (typeof applySavedFontSize === 'function') applySavedFontSize();
-    
-    
-}
-*/
-/*
-function updateReviewUI() {
-    if (currentDeck && currentDeck.cards) {
-        reviewCards = currentDeck.cards; 
-    }
-
-    // PERMANENT FIX: Ensure we are always on a grid boundary
-    if (currentChunkStart % chunkSize !== 0) {
-        currentChunkStart = Math.floor(currentChunkStart / chunkSize) * chunkSize;
-    }
-
-    const scrollContainer = document.getElementById('reviewData');
-    if (scrollContainer) scrollContainer.scrollTop = 0;
-
-    if (!reviewCards || reviewCards.length === 0) return;
-
-    // --- 2. Main Card Content Area (SMART BOUNDARIES) ---
-    // Calculate actual cards available in this specific chunk
-    const effectiveChunkSize = Math.min(chunkSize, reviewCards.length - currentChunkStart);
-    
-    // Safety: prevent index out of bounds
-    if (chunkIndex >= effectiveChunkSize) {
-        chunkIndex = Math.max(0, effectiveChunkSize - 1);
-    }
-
-    const actualCardIndex = currentChunkStart + chunkIndex;
-    const card = reviewCards[actualCardIndex] || reviewCards[0];
-
-    if (document.getElementById('revQ')) document.getElementById('revQ').innerText = card.question;
-    if (document.getElementById('revA')) document.getElementById('revA').innerText = card.answer;
-    if (document.getElementById('revP')) document.getElementById('revP').innerHTML = card.phrase || "";
-    if (document.getElementById('revN')) document.getElementById('revN').innerText = card.notes || "";
-    
-    if (document.getElementById('cardCounterLabel')) {
-        document.getElementById('cardCounterLabel').innerText = `Card ${chunkIndex + 1} / ${effectiveChunkSize}`;
-    }
-
-    // --- 3. Standard Review Labels ---
-    const totalCards = reviewCards.length;
-    const remainingCount = reviewCards.filter(c => !c.srs).length;
-    const remSub = document.getElementById('reviewRemainingSub');
-    const totSub = document.getElementById('reviewTotalSub');
-    if (remSub) remSub.innerText = `Remaining: ${remainingCount} Cards`;
-    if (totSub) totSub.innerText = `Total: ${totalCards} Cards`;
-
-    
-    // --- 4. PROGRESS BAR (FLEXBOX FIX) ---
-    const pbContainer = document.getElementById('progressBarContainer');
-    if (pbContainer) {
-        const totalCards = reviewCards.length;
-        const totalScheduled = reviewCards.filter(c => c.srs).length;
-        const scheduledPercent = (totalScheduled / totalCards) * 100;
-
-        // We use "display: flex" to prevent segments from wrapping to the next line
-        pbContainer.style.cssText = `
-            position: relative; 
-            width: 100%; 
-            height: 18px; 
-            margin: 15px 0; 
-            border: 1px solid #222; 
-            box-sizing: border-box; 
-            background: '#28a745'; 
-            display: flex; 
-            flex-direction: row; 
-            overflow: visible; 
-            z-index: 100; 
-            box-shadow: none;
-        `;
-        pbContainer.innerHTML = ''; 
-
-        const totalChunks = Math.ceil(totalCards / chunkSize);
-        const activeChunkIndex = Math.floor(currentChunkStart / chunkSize);
-
-        for (let i = 0; i < totalChunks; i++) {
-            const startIdx = i * chunkSize;
-            const endIdx = Math.min(startIdx + chunkSize, totalCards);
-            const chunkCards = reviewCards.slice(startIdx, endIdx);
-            const isChunkComplete = chunkCards.every(c => c.srs);
-
-            // Calculate actual width based on card count (e.g., 5 cards vs 20 cards)
-            const chunkWidth = (chunkCards.length / totalCards) * 100;
-
-            const chunkBox = document.createElement('div');
-            
-            // REMOVED flex: 1 and added width: ${chunkWidth}%
-            chunkBox.style.cssText = `
-                width: ${chunkWidth}%; 
-                height: 100%; 
-                position: relative; 
-                box-sizing: border-box; 
-                border-right: 1px solid rgba(0,0,0,0.15);
-                background-color: ${isChunkComplete ? '#ffeb3b' : '#28a745'};
-            `;
-
-            if (i === activeChunkIndex) {
-                // REMOVED the white background color to fix the "whitish" look
-                chunkBox.style.border = "1px solid #000";
-                chunkBox.style.zIndex = "5"; // Ensures the active border sits on top
-                
-                const marker = document.createElement('div');
-                marker.style.cssText = `
-                    position: absolute; 
-                    bottom: 100%; 
-                    left: 50%;
-                    margin-bottom: 4px; 
-                    width: 0; 
-                    height: 0;
-                    border-left: 7px solid transparent; 
-                    border-right: 7px solid transparent;
-                    border-top: 10px solid #000; 
-                    transform: translateX(-50%);
-                `;
-                chunkBox.appendChild(marker);
-            }
-            
-            pbContainer.appendChild(chunkBox);
-        }
-    }
-    // --- 5. Scheduled & Pending Labels ---
-    const srsQtyEl = document.getElementById('inspectedQty'); 
-    const penQtyEl = document.getElementById('pendingQty');
-    if (srsQtyEl && penQtyEl) {
-        const scheduledCount = reviewCards.filter(c => c.srs).length;
-        const pendingCount = reviewCards.length - scheduledCount;
-        srsQtyEl.innerHTML = `<span style="color: #d4af37; font-weight: bold;">Scheduled: ${scheduledCount}</span>`;
-        penQtyEl.innerHTML = `<span style="color: #28a745; font-weight: bold;">Pending: ${pendingCount}</span>`;
-    }
-
-    if (typeof applySavedAlignment === 'function') applySavedAlignment();
-    if (typeof applySavedFontSize === 'function') applySavedFontSize();
-}
-*/
 function updateReviewUI() {
 
 
@@ -1371,24 +843,7 @@ function updateReviewUI() {
 
     if (!reviewCards || reviewCards.length === 0) return;
 
-    // --- SECTION 2: MAIN CARD CONTENT AREA ---
-    /*
-    const effectiveChunkSize = Math.min(chunkSize, reviewCards.length - currentChunkStart);
-    if (chunkIndex >= effectiveChunkSize) chunkIndex = Math.max(0, effectiveChunkSize - 1);
-
-    const actualCardIndex = currentChunkStart + chunkIndex;
-    const card = reviewCards[actualCardIndex] || reviewCards[0];
-
-    if (document.getElementById('revQ')) document.getElementById('revQ').innerText = card.question;
-    if (document.getElementById('revA')) document.getElementById('revA').innerText = card.answer;
-    if (document.getElementById('revP')) document.getElementById('revP').innerHTML = card.phrase || "";
     
-    if (document.getElementById('revN')) document.getElementById('revN').innerText = card.notes || "";
-    
-    if (document.getElementById('cardCounterLabel')) {
-        document.getElementById('cardCounterLabel').innerText = `Card ${chunkIndex + 1} / ${effectiveChunkSize}`;
-    }
-    */
     // --- SECTION 2: MAIN CARD CONTENT AREA ---
     const effectiveChunkSize = Math.min(chunkSize, reviewCards.length - currentChunkStart);
     if (chunkIndex >= effectiveChunkSize) chunkIndex = Math.max(0, effectiveChunkSize - 1);
@@ -1566,21 +1021,6 @@ function shuffleSRSSession() {
     console.log("SRS Session order shuffled manually.");
 }
 
-// NAVIGATION: CARD LEVEL (TAPPING)
-/*
-function nextCardInChunk() {
-    // 1. Increment the index
-    chunkIndex++;
-
-    // 2. Check boundaries: 
-    // Is it past the chunk limit? OR is it past the actual end of the deck?
-    if (chunkIndex >= chunkSize || (currentChunkStart + chunkIndex) >= reviewCards.length) {
-        chunkIndex = 0; // Loop back to start of current chunk
-    }
-    
-    updateReviewUI();
-}
-*/
 function nextCardInChunk() {
     // Calculate how many cards actually exist in this chunk
     const effectiveChunkSize = Math.min(chunkSize, reviewCards.length - currentChunkStart);
@@ -1594,24 +1034,7 @@ function nextCardInChunk() {
     
     updateReviewUI();
 }
-/*
-function prevCardInChunk() {
-    // 1. Decrement the index
-    chunkIndex--;
 
-    // 2. Check boundaries:
-    if (chunkIndex < 0) {
-        // Find the last valid card in this specific chunk
-        // If it's the last chunk, it might be smaller than chunkSize
-        const remainingCards = reviewCards.length - currentChunkStart;
-        const lastValidIndexInChunk = Math.min(chunkSize, remainingCards) - 1;
-        
-        chunkIndex = lastValidIndexInChunk;
-    }
-    
-    updateReviewUI();
-}
-*/
 function prevCardInChunk() {
     // Calculate how many cards actually exist in this chunk
     const effectiveChunkSize = Math.min(chunkSize, reviewCards.length - currentChunkStart);
@@ -1636,14 +1059,7 @@ function handleReviewTap(e) {
         nextCardInChunk(); // Right side tap
     }
 }
-// CHUNK SIZE ADJUSTMENT
-/*
-function adjustChunkSize(val) {
-    chunkSize = Math.max(1, chunkSize + val);
-    chunkIndex = 0; // Reset chunk position to avoid index out of bounds
-    updateReviewUI();
-}
-*/
+
 function adjustChunkSize(val) {
     chunkSize = Math.max(1, chunkSize + val);
     
@@ -1992,108 +1408,7 @@ function closeEditModal() {
     console.log("🧹 UI Cleaned: Modal closed and Search reset.");
 }
 
-// SCHEDULE 
-/*
-function updateSRSBadge() {
-    const srsBtn = document.getElementById('srsReviewBtn');
-    if (!srsBtn || !currentDeck || !currentDeck.cards) return;
 
-    srsBtn.style.position = 'relative';
-    const now = Date.now();
-    
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    const endOfTodayTs = endOfToday.getTime();
-
-    const activeSRS = currentDeck.cards.filter(c => c.srs && !c.srs.mastered);
-    
-    const dueCount = activeSRS.filter(c => now >= (c.srs.nextReview || 0)).length;
-    const upcoming = activeSRS.filter(c => (c.srs.nextReview || 0) > now)
-                               .sort((a, b) => a.srs.nextReview - b.srs.nextReview);
-
-    const pendingToday = activeSRS.filter(c => 
-        (c.srs.nextReview || 0) > now && (c.srs.nextReview || 0) <= endOfTodayTs
-    ).length;
-
-    let nextText = "";
-    let labelColor = "#666";
-
-    if (dueCount === 0 && upcoming.length > 0) {
-        const nextTime = upcoming[0].srs.nextReview;
-        const totalMins = Math.ceil((nextTime - now) / 60000);
-        if (totalMins < 60) {
-            nextText = `Next: ${totalMins}m`;
-            if (totalMins <= 10) labelColor = "#ffcc00"; 
-        } else {
-            const h = Math.floor(totalMins / 60);
-            const m = totalMins % 60;
-            nextText = m > 0 ? `Next: ${h}h ${m}m` : `Next: ${h}h`;
-        }
-    }
-
-    
-    // --- FIXED SRS BUTTON LAYOUT ---
-    const totalInDeck = currentDeck.cards.length;
-    // Calculate the batch size for the (337) part
-    const batchSize = upcoming.length > 0 ? activeSRS.filter(c => c.srs.nextReview === upcoming[0].srs.nextReview).length : 0;
-
-    srsBtn.innerHTML = `
-        <span style="font-weight: bold;">SRS Review</span>
-        <div style="display: flex; justify-content: center; gap: 5px; font-size: 0.7em; color: #666; margin-top: 2px;">
-            <span>Total: ${totalInDeck} Cards</span>
-            <span style="opacity: 0.5;">|</span>
-            <span style="color: ${labelColor} !important; font-weight: bold;">
-                ${dueCount > 0 ? `${dueCount} Due Now` : `${nextText} (${batchSize})`}
-            </span>
-        </div>
-
-        <div id="srsBadge" style="
-            position: absolute; top: 8px; right: 8px;
-            background: #ff4444; color: white; border-radius: 50%; 
-            width: 22px; height: 22px; 
-            display: ${dueCount > 0 ? 'flex' : 'none'}; 
-            align-items: center; justify-content: center; 
-            font-size: 11px; font-weight: bold; z-index: 10;
-        ">${dueCount}</div>
-
-        <div id="srsPendingBadge" style="
-            position: absolute; top: 8px; right: 34px;
-            background: #3498db; color: white; border-radius: 50%; 
-            width: 22px; height: 22px; 
-            display: ${pendingToday > 0 ? 'flex' : 'none'}; 
-            align-items: center; justify-content: center; 
-            font-size: 11px; font-weight: bold; z-index: 9;
-        ">${pendingToday}</div>
-    `;
-
-
-    // Update the external button visibility/text if it exists
-    const externalForceBtn = document.getElementById('forceLoad20Btn');
-    if (externalForceBtn) {
-        const hasUpcoming = upcoming.length > 0;
-        const isDueNow = dueCount > 0;
-
-        // 1. Show the button if there are any cards waiting at all
-        externalForceBtn.style.display = hasUpcoming ? 'block' : 'none';
-
-        if (isDueNow) {
-            // 2. Grey it out if there are RED cards to finish first
-            externalForceBtn.disabled = true;
-            externalForceBtn.style.background = '#ccc';
-            externalForceBtn.style.color = '#888';
-            externalForceBtn.style.cursor = 'not-allowed';
-            externalForceBtn.innerText = `Finish Due Cards First`;
-        } else {
-            // 3. Enable it when the red queue is empty
-            externalForceBtn.disabled = false;
-            externalForceBtn.style.background = '#444';
-            externalForceBtn.style.color = 'white';
-            externalForceBtn.style.cursor = 'pointer';
-            externalForceBtn.innerText = `Force Load Next 20`;
-        }
-    }
-}
-*/
 function updateSRSBadge() {
     const srsBtn = document.getElementById('srsReviewBtn');
     if (!srsBtn || !currentDeck || !currentDeck.cards) return;
@@ -2219,99 +1534,7 @@ function resetSchedule() {
         console.log("All SRS and Mastery data cleared.");
     }
 }
-/*
-async function toggleScheduleFlash() {
-    const chunkStart = currentChunkStart;
-    const chunkEnd = Math.min(chunkStart + chunkSize, currentDeck.cards.length); 
-    const flashIndex = flashedChunks.indexOf(chunkStart);
 
-    if (flashIndex !== -1) {
-        // --- REMOVE SCHEDULE ---
-        flashedChunks.splice(flashIndex, 1);
-        for (let i = chunkStart; i < chunkEnd; i++) {
-            if (currentDeck.cards[i]) delete currentDeck.cards[i].srs;
-        }
-    } else {
-        // --- ADD SCHEDULE ---
-        flashedChunks.push(chunkStart);
-        // Pulls the 5m interval from the array
-        const targetNextReview = Date.now() + (SRS_INTERVALS[0] * 60000);
-        
-        for (let i = chunkStart; i < chunkEnd; i++) {
-            if (currentDeck.cards[i]) {
-                currentDeck.cards[i].srs = {
-                    level: 0,
-                    mastered: false,
-                    nextReview: targetNextReview 
-                };
-            }
-        }
-    }
-
-    const pb = document.getElementById('progressBarContainer');
-    if (pb) pb.dataset.needsRedraw = "true";
-
-    await saveSession(); 
-    
-    reviewCards = currentDeck.cards.slice();
-    
-    updateReviewUI(); 
-    if (typeof updateSRSBadge === "function") await updateSRSBadge();
-}
-*/
-/*
-async function toggleScheduleFlash() {
-    const totalCards = currentDeck.cards.length;
-    const chunkStart = currentChunkStart;
-    const intendedEnd = chunkStart + chunkSize;
-
-    // --- DIAGNOSTIC ALERT FOR IPHONE ---
-    // This tells us exactly where the pointer is sitting
-    const totalSched = currentDeck.cards.filter(c => c.srs).length;
-    const totalPend = totalCards - totalSched;
-
-    // --- THE LOGIC CHECK ---
-    if (intendedEnd > totalCards) {
-        const remainingInDeck = totalCards - chunkStart;
-        const needsMore = chunkSize - remainingInDeck;
-
-        // If we have plenty of pending cards globally (like your 25), 
-        // but this specific "slot" is too close to the end of the deck:
-        alert(`Incomplete Block: This slot only has ${remainingInDeck} cards left before the deck ends. 
-        
-            To schedule these, you must adjust your traverse (-) to ${remainingInDeck}.`);
-        return; 
-    }
-
-    // --- PROCEED WITH SCHEDULING ---
-    const chunkEnd = intendedEnd; 
-    const flashIndex = flashedChunks.indexOf(chunkStart);
-
-    if (flashIndex !== -1) {
-        flashedChunks.splice(flashIndex, 1);
-        for (let i = chunkStart; i < chunkEnd; i++) {
-            if (currentDeck.cards[i]) delete currentDeck.cards[i].srs;
-        }
-    } else {
-        flashedChunks.push(chunkStart);
-        const targetNextReview = Date.now() + (SRS_INTERVALS[0] * 60000);
-        for (let i = chunkStart; i < chunkEnd; i++) {
-            if (currentDeck.cards[i]) {
-                currentDeck.cards[i].srs = {
-                    level: 0,
-                    mastered: false,
-                    nextReview: targetNextReview 
-                };
-            }
-        }
-    }
-
-    await saveSession(); 
-    reviewCards = currentDeck.cards.slice();
-    updateReviewUI(); 
-    if (typeof updateSRSBadge === "function") await updateSRSBadge();
-}
-*/
 async function toggleScheduleFlash() {
     const chunkStart = currentChunkStart;
     const chunkEnd = Math.min(chunkStart + chunkSize, currentDeck.cards.length); 
@@ -2338,185 +1561,7 @@ async function toggleScheduleFlash() {
     if (typeof updateSRSBadge === "function") await updateSRSBadge();
 }
 
-//SRS REVIEW
 /*
-async function startSRSReview(forceLoadPostponed = false) {
-    window.currentViewMode = "srs";
-    if (!currentDeck || !currentDeck.cards) return;
-    
-    const now = Date.now();
-    const source = currentDeck.cards; 
-    
-    let allDue = [];
-    let soonestDue = Infinity;
-    let nextBatchCount = 0;
-
-    if (forceLoadPostponed) {
-        // Force Load behavior: Bypass timestamps
-        allDue = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now))
-                       .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0)); 
-    } else {
-        // Standard behavior
-        allDue = source.filter(c => {
-            if (!c.srs || c.srs.mastered) return false;
-            const isDue = now >= (c.srs.nextReview || 0);
-            
-            if (!isDue) {
-                // Track the absolute soonest card
-                if (c.srs.nextReview < soonestDue) {
-                    soonestDue = c.srs.nextReview;
-                }
-                return false;
-            }
-            return true;
-        }).sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0)); // Added Sort
-
-        // COUNT how many cards are due at that same "soonest" time
-        if (soonestDue !== Infinity) {
-            nextBatchCount = source.filter(c => 
-                c.srs && !c.srs.mastered && c.srs.nextReview === soonestDue
-            ).length;
-        }
-    }
-
-    // --- AUDIT LOG: Monitor what is being loaded ---
-    console.log(`%c 📥 SRS PULL: ${allDue.length} cards found`, "background: #222; color: #00d4ff; font-weight: bold;");
-    if (allDue.length > 0) {
-        console.table(allDue.slice(0, 30).map(c => ({
-            Question: c.question.substring(0,20),
-            Scheduled: new Date(c.srs.nextReview).toLocaleString(),
-            IsDue: (c.srs.nextReview <= now) ? "YES" : "NO",
-            Timestamp: c.srs.nextReview
-        })));
-    }
-
-    // --- UPDATE THE UI LABEL ---
-    
-    if (typeof updateSRSBadge === "function") updateSRSBadge();
-
-    if (allDue.length === 0) {
-        // If Standard fails, we offer the alert
-        if (!forceLoadPostponed) {
-            if (confirm("Queue is clear! Load next 30 cards anyway?")) {
-                await startSRSReview(true);
-                return; 
-            }
-        } else {
-            alert("Queue is clear!");
-        }
-        return;
-    }
-
-    // Logic for batching
-    currentDueCards = allDue.length > 30 ? allDue.slice(0, 30) : allDue;
-
-    if (allDue.length > 30 && !forceLoadPostponed) {
-        await postponeExcessCards(allDue.slice(30));
-    }
-
-    srsTotalSessionCount = currentDueCards.length;
-    srsCompletedInSession = 0;
-    srsModalIndex = 0;
-    recallQueue = [...currentDueCards]; 
-    matchQueue = [...currentDueCards];
-
-    await saveSession(); 
-    
-    const modal = document.getElementById('srsModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        renderSRSModalCard();
-    }
-}
-*/
-/*
-async function startSRSReview(forceLoadPostponed = false) {
-    window.currentViewMode = "srs";
-    if (!currentDeck || !currentDeck.cards) return;
-    
-    const now = Date.now();
-    const source = currentDeck.cards; 
-    
-    let allDue = [];
-    let soonestDue = Infinity;
-    let nextBatchCount = 0;
-
-    if (forceLoadPostponed) {
-        // Force Load behavior: Bypass timestamps and grab upcoming cards
-        allDue = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now))
-                       .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0)); 
-    } else {
-        // --- PRIORITY LOGIC: Oldest Due First ---
-        // 1. Filter for everything currently due
-        const currentlyDue = source.filter(c => {
-            if (!c.srs || c.srs.mastered) return false;
-            return now >= (c.srs.nextReview || 0);
-        });
-
-        // 2. SORT: Ascending order (lowest timestamp = oldest/most overdue)
-        allDue = currentlyDue.sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
-
-        // 3. Track soonest upcoming for the UI label
-        const upcoming = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now));
-        if (upcoming.length > 0) {
-            const sortedUpcoming = upcoming.sort((a, b) => a.srs.nextReview - b.srs.nextReview);
-            soonestDue = sortedUpcoming[0].srs.nextReview;
-            
-            // Count cards in that specific next batch time
-            nextBatchCount = source.filter(c => 
-                c.srs && !c.srs.mastered && c.srs.nextReview === soonestDue
-            ).length;
-        }
-    }
-
-    // --- AUDIT LOG ---
-    console.log(`%c 📥 SRS PULL: ${allDue.length} cards found`, "background: #222; color: #00d4ff; font-weight: bold;");
-    if (allDue.length > 0) {
-        console.table(allDue.slice(0, 30).map(c => ({
-            Question: c.question.substring(0,20),
-            Scheduled: new Date(c.srs.nextReview).toLocaleString(),
-            IsDue: (c.srs.nextReview <= now) ? "YES" : "NO",
-            Timestamp: c.srs.nextReview
-        })));
-    }
-
-    // Use the master function to keep labels consistent
-    if (typeof updateSRSBadge === "function") updateSRSBadge();
-
-    if (allDue.length === 0) {
-        if (!forceLoadPostponed) {
-            if (confirm("Queue is clear! Load next 30 cards anyway?")) {
-                return startSRSReview(true);
-            }
-        } else {
-            alert("Queue is clear!");
-        }
-        return;
-    }
-
-    // Batching: Take the top 30 (which are now the 30 MOST overdue)
-    currentDueCards = allDue.length > 30 ? allDue.slice(0, 30) : allDue;
-
-    if (allDue.length > 30 && !forceLoadPostponed) {
-        // Push everything past the first 30 an hour back
-        await postponeExcessCards(allDue.slice(30));
-    }
-
-    srsTotalSessionCount = currentDueCards.length;
-    srsCompletedInSession = 0;
-    srsModalIndex = 0;
-    recallQueue = [...currentDueCards]; 
-    matchQueue = [...currentDueCards];
-
-    await saveSession(); 
-    
-    const modal = document.getElementById('srsModal');
-    if (modal) {
-        modal.style.display = 'flex';
-        renderSRSModalCard();
-    }
-}
-*/
 async function startSRSReview(forceLoadPostponed = false) {
     window.currentViewMode = "srs";
     if (!currentDeck || !currentDeck.cards) return;
@@ -2585,6 +1630,80 @@ async function startSRSReview(forceLoadPostponed = false) {
         renderSRSModalCard();
     }
 }
+*/
+async function startSRSReview(forceLoadPostponed = false) {
+    window.currentViewMode = "srs";
+    if (!currentDeck || !currentDeck.cards) return;
+    
+    const now = Date.now();
+    const source = currentDeck.cards; 
+    
+    // Calculate midnight tonight
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    const endOfTodayTs = endOfToday.getTime();
+
+    let allDue = [];
+    let soonestDue = Infinity;
+    let nextBatchCount = 0;
+
+    if (forceLoadPostponed) {
+        // FIX: Only grab cards scheduled AFTER now, but BEFORE midnight tonight
+        allDue = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now && c.srs.nextReview <= endOfTodayTs))
+                       .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0)); 
+    } else {
+        const currentlyDue = source.filter(c => {
+            if (!c.srs || c.srs.mastered) return false;
+            return now >= (c.srs.nextReview || 0);
+        });
+
+        allDue = currentlyDue.sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
+        
+        const upcoming = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now));
+        if (upcoming.length > 0) {
+            const sortedUpcoming = upcoming.sort((a, b) => a.srs.nextReview - b.srs.nextReview);
+            soonestDue = sortedUpcoming[0].srs.nextReview;
+            nextBatchCount = source.filter(c => 
+                c.srs && !c.srs.mastered && c.srs.nextReview === soonestDue
+            ).length;
+        }
+    }
+
+    if (typeof updateSRSBadge === "function") updateSRSBadge();
+
+    if (allDue.length === 0) {
+        if (!forceLoadPostponed) {
+            // FIX: Clearer message indicating it will pull from today's remaining pool
+            if (confirm("Queue is clear! Force load next 20 postponed cards from today's pool?")) {
+                await startSRSReview(true);
+                return;
+            }
+        } else {
+            alert("No more postponed cards left for today!");
+        }
+        return;
+    }
+
+    currentDueCards = allDue.length > 20 ? allDue.slice(0, 20) : allDue;
+
+    if (allDue.length > 20 && !forceLoadPostponed) {
+        await postponeExcessCards(allDue.slice(20));
+    }
+
+    srsTotalSessionCount = currentDueCards.length;
+    srsCompletedInSession = 0;
+    srsModalIndex = 0;
+    recallQueue = [...currentDueCards]; 
+    matchQueue = [...currentDueCards];
+
+    await saveSession(); 
+    
+    const modal = document.getElementById('srsModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        renderSRSModalCard();
+    }
+}
 function adjustSRSInterval(delta) {
     const card = currentDueCards[srsModalIndex];
     if (!card || !card.srs) return;
@@ -2626,39 +1745,6 @@ async function postponeExcessCards(cards) {
             const deck = getReq.result;
             if (!deck) return resolve();
 
-            const newTime = Date.now() + 3600000; // 1 Hour
-            const targetIds = new Set(cards.map(c => c.id));
-
-            deck.cards.forEach(card => {
-                if (targetIds.has(card.id)) {
-                    if (!card.srs) card.srs = { level: 0, mastered: false };
-                    card.srs.nextReview = newTime;
-                }
-            });
-
-            store.put(deck);
-        };
-
-        transaction.oncomplete = () => {
-            // Update global state after DB is confirmed saved
-            reviewCards = currentDeck.cards.slice();
-            resolve();
-        };
-
-        transaction.onerror = (e) => reject(e);
-    });
-}
-*/
-async function postponeExcessCards(cards) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const getReq = store.get(currentDeckId);
-
-        getReq.onsuccess = () => {
-            const deck = getReq.result;
-            if (!deck) return resolve();
-
             const newTime = Date.now() + 3600000; // 1 Hour from now
             const targetIds = new Set(cards.map(c => c.id));
 
@@ -2685,90 +1771,55 @@ async function postponeExcessCards(cards) {
         transaction.onerror = (e) => reject(e);
     });
 }
-/*
-function renderSRSModalCard() {
-    if (!currentDueCards || currentDueCards.length === 0) {
-        closeSRSModal();
-        return;
-    }
-    if (srsModalIndex >= currentDueCards.length) srsModalIndex = 0;
-    const card = currentDueCards[srsModalIndex]; 
-    if (!card) return;
-
-    // 1. Main Text Content
-    document.getElementById('srsQ').innerText = card.question || "";
-    document.getElementById('srsA').innerText = card.answer || "";
-    
-    const phraseEl = document.getElementById('srsP');
-    const notesEl = document.getElementById('srsN');
-    if (phraseEl) {
-        phraseEl.innerHTML = card.phrase || "";
-        phraseEl.style.display = card.phrase ? "block" : "none";
-    }
-    if (notesEl) {
-        notesEl.innerText = card.notes || "";
-        notesEl.style.display = card.notes ? "block" : "none";
-    }
-
-    // 2. Icon-Style Counter (Using your specific 26px/0px styling)
-    const counterEl = document.getElementById('srsCounter');
-    if (counterEl) {
-        const remainingCount = currentDueCards.length;
-        counterEl.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 8px; border-radius: 8px;">
-                <div style="display: flex; flex-direction: column; gap: 2px; padding: 4px 8px; background: rgba(255,255,255,0.9); border-radius: 6px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                        <span style="font-size: 8px; color: #bbb; text-transform: uppercase; font-weight: bold;">Total</span>
-                        <span style="color: #bbb; font-weight: bold; font-size: 10px;">${srsCompletedInSession + 1}/${srsTotalSessionCount}</span>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                        <span style="font-size: 8px; color: #888; text-transform: uppercase; font-weight: bold;">Loop</span>
-                        <span style="color: #888; font-weight: bold; font-size: 10px;">${srsModalIndex + 1}/${remainingCount}</span>
-                    </div>
-                </div>
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 26px; padding: 2px 0px; background: #f4f4f4; border: 1.5px solid #ddd; border-radius: 8px;">
-                    <span style="font-size: 18px; font-weight: 900; color: #444; line-height: 1;">${remainingCount}</span>
-                    <span style="font-size: 7px; color: #888; text-transform: uppercase; font-weight: bold; margin-top: 1px;">Left</span>
-                </div>
-            </div>
-        `;
-    }
-
-    // 3. Footer Hub
-    const footer = document.getElementById('srsModalFooter');
-    if (footer) {
-        footer.innerHTML = `
-            <div style="display: flex; flex-direction: column; height: 115px; border-top: 1px solid #eee; background: #fff; width: 100%;">
-                <div style="flex: 1.3; display: flex; align-items: center; justify-content: space-around; border-bottom: 1px solid #f0f0f0; padding: 5px 0;">
-                    <button onclick="adjustSRSInterval(-1)" style="border:none; background:none; font-size: 32px; color: #ccc; width: 60px;">−</button>
-                    <div style="text-align: center;">
-                        <span id="modalIntervalText" style="font-size: 1.25em; font-weight: bold; color: #333;">--</span>
-                        <div id="srs-confirm-btn" onclick="handleSRSClick(event)" style="margin-top: 4px; padding: 6px 18px; background: #007bff; color: white; border-radius: 15px; font-size: 10px; font-weight: bold; text-transform: uppercase;">CONFIRM</div>
-                    </div>
-                    <button onclick="adjustSRSInterval(1)" style="border:none; background:none; font-size: 32px; color: #ccc; width: 60px;">+</button>
-                </div>
-                <div style="flex: 1; display: flex; background: #f9f9f9;">
-                    <div onclick="navigateSRSQueue(-1)" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid #eee; cursor: pointer;">
-                        <span style="font-size: 1.2em; color: #999;">⟵</span>
-                        <span id="modalPrevLabel" style="font-size: 10px; color: #888; font-weight: bold;">--</span>
-                    </div>
-                    <div onclick="navigateSRSQueue(1)" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
-                        <span style="font-size: 1.2em; color: #999;">⟶</span>
-                        <span id="modalNextLabel" style="font-size: 10px; color: #888; font-weight: bold;">--</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Initial Sync
-    if (!card.srs) card.srs = { level: 0, mastered: false };
-    syncSRSIntervalLabels(card.srs.level);
-    
-    applySavedAlignment();
-    applySavedFontSize();
-}
 */
+async function postponeExcessCards(cards) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        const getReq = store.get(currentDeckId);
+
+        getReq.onsuccess = () => {
+            const deck = getReq.result;
+            if (!deck) return resolve();
+
+            const now = Date.now();
+            
+            // THE TODAY CAP: Calculate 11:59:59 PM for tonight
+            const endOfToday = new Date();
+            endOfToday.setHours(23, 59, 59, 999);
+            const endOfTodayTs = endOfToday.getTime();
+
+            // Calculate the standard 1-hour delay
+            let newTime = now + 3600000; 
+            
+            // If 1 hour from now crosses midnight, cap it at the very end of today
+            if (newTime > endOfTodayTs) {
+                newTime = endOfTodayTs;
+            }
+
+            const targetIds = new Set(cards.map(c => c.id));
+
+            deck.cards.forEach(card => {
+                if (targetIds.has(card.id)) {
+                    if (!card.srs) card.srs = { level: 0, mastered: false };
+                    card.srs.nextReview = newTime;
+                }
+            });
+
+            currentDeck = deck; 
+            reviewCards = deck.cards.slice();
+            store.put(deck);
+        };
+
+        transaction.oncomplete = () => {
+            console.log(`%c ⏳ Postponed ${cards.length} cards within today's window.`, "color: #ffa500");
+            if (typeof updateSRSBadge === "function") updateSRSBadge();
+            resolve();
+        };
+
+        transaction.onerror = (e) => reject(e);
+    });
+}
 function renderSRSModalCard() {
     if (!currentDueCards || currentDueCards.length === 0) {
         closeSRSModal();
@@ -2863,62 +1914,7 @@ function navigateSRSQueue(delta) {
     if (srsModalIndex < 0) srsModalIndex = currentDueCards.length - 1;
     renderSRSModalCard();
 }
-/*
-async function handleSRSClick(type) {
-    const card = currentDueCards[srsModalIndex];
-    if (!card || !card.srs) return;
 
-    // 1. Force the baseline to NOW
-    const now = Date.now();
-
-    // 2. Identify the labels (This is exactly what your 'prev' button uses)
-    const labelMap = {
-        'prev': 'modalPrevLabel',
-        'next': 'modalNextLabel',
-        'stay': 'modalIntervalText'
-    };
-
-    const targetId = labelMap[type];
-    const labelEl = document.getElementById(targetId);
-
-    if (!labelEl) {
-        console.error(`Could not find label element: ${targetId}`);
-        return;
-    }
-
-    const labelText = labelEl.innerText.trim();
-    const minutes = parseLabelToMinutes(labelText);
-
-    // 3. THE "LEFT BUTTON" LOGIC: Direct Level Assignment
-    if (minutes > 0) {
-        // Find where this time lives in your SRS array (e.g. 2880m = Index 5)
-        const targetLevel = SRS_INTERVALS.indexOf(minutes);
-        if (targetLevel !== -1) {
-            card.srs.level = targetLevel;
-        }
-
-        // Apply the time strictly from THIS MOMENT
-        card.srs.nextReview = now + (minutes * 60000);
-    }
-
-    // 4. Save and Move to Next Card
-    if (card.srs.level >= SRS_INTERVALS.length - 1) card.srs.mastered = true;
-
-    console.log(`✅ FORCED SYNC: Button[${type}] -> Label[${labelText}] -> Level[${card.srs.level}]`);
-
-    await saveSession(card);
-    srsCompletedInSession++;
-    currentDueCards.splice(srsModalIndex, 1);
-
-    if (currentDueCards.length === 0) {
-        await saveSession(); 
-        closeSRSModal();
-        return;
-    }
-    if (srsModalIndex >= currentDueCards.length) srsModalIndex = 0;
-    renderSRSModalCard();
-}
-*/
 async function handleSRSClick(type) {
     const card = currentDueCards[srsModalIndex];
     if (!card || !card.srs) return;
@@ -2968,18 +1964,7 @@ async function handleSRSClick(type) {
     if (srsModalIndex >= currentDueCards.length) srsModalIndex = 0;
     renderSRSModalCard();
 }
-/*
-// Ensure this parser matches your interval format
-function parseLabelToMinutes(label) {
-    const val = parseInt(label);
-    if (isNaN(val)) return 0;
-    const s = label.toLowerCase();
-    if (s.includes('d')) return val * 1440;
-    if (s.includes('h')) return val * 60;
-    if (s.includes('m')) return val;
-    return val;
-}
-*/
+
 function parseLabelToMinutes(label) {
     if (!label) return 0;
     const cleanLabel = label.toLowerCase().trim();
@@ -3134,107 +2119,7 @@ function shuffleArray(array) {
         [array[i], array[j]] = [array[j], array[i]];
     }
 }
-/*
-function renderRecallCard() {
-    // 1. Check if we've reached the end
-    if (recallIndex >= recallQueue.length) {
-        console.log("Quick Recall Finished. Closing...");
-        closeQuickRecall();
-        return;
-    }
 
-    const card = recallQueue[recallIndex];
-    const qEl = document.getElementById('recallQuestion');
-    const btnA = document.getElementById('recallOptionA');
-    const btnB = document.getElementById('recallOptionB');
-    const counter = document.getElementById('recallCounter');
-
-    // 2. Reset Buttons (The "Clean Slate" Logic)
-    [btnA, btnB].forEach(btn => {
-        if (btn) {
-            btn.style.color = "#555";        // Reset text to default grey
-            btn.style.backgroundColor = "";  // Reset background
-            btn.disabled = false;            // Re-enable
-            btn.style.opacity = "1";
-        }
-    });
-
-    // 3. Update Text and Counter
-    if (qEl) qEl.innerText = card.question;
-    if (counter) {
-        counter.innerText = `${recallIndex + 1} / ${recallQueue.length}`;
-    }
-
-    // 4. Get Distractor
-    let otherCards = reviewCards.filter(c => c.answer !== card.answer);
-    let distractor = otherCards.length > 0 
-        ? otherCards[Math.floor(Math.random() * otherCards.length)].answer 
-        : "Incorrect Answer";
-
-    // 5. Randomize sides
-    recallCorrectIdx = Math.random() < 0.5 ? 0 : 1;
-    
-    if (recallCorrectIdx === 0) {
-        btnA.innerText = card.answer;
-        btnB.innerText = distractor;
-    } else {
-        btnA.innerText = distractor;
-        btnB.innerText = card.answer;
-    }
-}
-*/
-/*
-function renderRecallCard() {
-    // 1. Check if we've reached the end
-    if (recallIndex >= recallQueue.length) {
-        console.log("Quick Recall Finished. Closing...");
-        closeQuickRecall();
-        return;
-    }
-
-    const card = recallQueue[recallIndex];
-    const qEl = document.getElementById('recallQuestion');
-    const pEl = document.getElementById('recallPhrase'); // Target phrase element
-    const btnA = document.getElementById('recallOptionA');
-    const btnB = document.getElementById('recallOptionB');
-    const counter = document.getElementById('recallCounter');
-
-    // 2. Reset Buttons (The "Clean Slate" Logic)
-    [btnA, btnB].forEach(btn => {
-        if (btn) {
-            btn.style.color = "#555";        // Reset text to default grey
-            btn.style.backgroundColor = "";  // Reset background
-            btn.disabled = false;            // Re-enable
-            btn.style.opacity = "1";
-        }
-    });
-
-    // 3. Update Text and Counter
-    if (qEl) qEl.innerText = card.question;
-    if (pEl) pEl.innerHTML = card.phrase || ""; // Inject phrase (supports bolding)
-    
-    if (counter) {
-        counter.innerText = `${recallIndex + 1} / ${recallQueue.length}`;
-    }
-
-    // 4. Get Distractor
-    let otherCards = reviewCards.filter(c => c.answer !== card.answer);
-    let distractor = otherCards.length > 0 
-        ? otherCards[Math.floor(Math.random() * otherCards.length)].answer 
-        : "Incorrect Answer";
-
-    // 5. Randomize sides
-    recallCorrectIdx = Math.random() < 0.5 ? 0 : 1;
-    
-    if (recallCorrectIdx === 0) {
-        btnA.innerText = card.answer;
-        btnB.innerText = distractor;
-    } else {
-        btnA.innerText = distractor;
-        btnB.innerText = card.answer;
-    }
-}
-*/
 function renderRecallCard() {
     if (recallIndex >= recallQueue.length) {
         closeQuickRecall();
@@ -3285,35 +2170,7 @@ function renderRecallCard() {
         btnB.innerText = (recallCorrectIdx === 1) ? card.answer : distractor;
     }
 }
-/*
-function handleRecallSelection(selectedIdx) {
-    const btnA = document.getElementById('recallOptionA');
-    const btnB = document.getElementById('recallOptionB');
-    const selectedBtn = selectedIdx === 0 ? btnA : btnB;
 
-    if (selectedIdx === recallCorrectIdx) {
-        // --- CORRECT: Change text to green only ---
-        selectedBtn.style.color = "#28a745"; 
-        
-        btnA.disabled = true;
-        btnB.disabled = true;
-        
-        setTimeout(() => {
-            recallIndex++;
-            renderRecallCard(); // This will trigger the reset above
-        }, 200); 
-    } else {
-        // --- INCORRECT: Change text to red only ---
-        selectedBtn.style.color = "#dc3545"; 
-        
-        // We don't advance the index on an error, 
-        // but we reset the color after a brief moment so they can try again
-        setTimeout(() => {
-            selectedBtn.style.color = "#555"; 
-        }, 400);
-    }
-}
-*/
 function handleRecallSelection(selectedIdx) {
     const btnA = document.getElementById('recallOptionA');
     const btnB = document.getElementById('recallOptionB');
@@ -3344,24 +2201,7 @@ function handleRecallSelection(selectedIdx) {
         }, 400);
     }
 }
-/*
-function closeQuickRecall() {
-    const modal = document.getElementById('recallModal');
-    if (modal) modal.style.display = 'none';
 
-    // Logic: If they finished all cards, they move to Match Blitz.
-    // If they closed early, we keep them in Recall so they can finish later.
-    if (recallQueue.length === 0) {
-        console.log("Quick Recall finished. Moving to Match Blitz stage.");
-        // Only trigger matchQueue logic if recall is truly empty
-    } else {
-        console.log("Quick Recall paused. Cards remaining: " + recallQueue.length);
-    }
-
-    updateReviewUI();
-
-}
-*/
 function closeQuickRecall() {
     const modal = document.getElementById('recallModal');
     if (modal) modal.style.display = 'none';
@@ -3509,25 +2349,7 @@ function handleMatchAttempt(selectedAnswer, clickedBtn) {
         }, 400);
     }
 }
-/*
-function highlightActiveQuestion() {
-    const questions = document.querySelectorAll('#matchLeftCol .match-item');
-    questions.forEach((q, i) => {
-        if (i === activeMatchIdx) {
-            // Simple blue border for selection
-            q.style.borderColor = "#3498db"; 
-            q.style.opacity = "1";
-        } else if (i < activeMatchIdx) {
-            // Hide matched items
-            q.style.visibility = "hidden";
-        } else {
-            // Future items are slightly faded
-            q.style.borderColor = "transparent";
-            q.style.opacity = "0.5";
-        }
-    });
-}
-*/
+
 function highlightActiveQuestion() {
     currentMatchSet.forEach((_, i) => {
         const qDiv = document.getElementById(`matchQ-${i}`);
@@ -3577,105 +2399,7 @@ function closeMatchBlitz() {
     saveSession(); // Lock it in
     updateReviewUI(); // Refresh the buttons
 }
-//IMPORT EXPORT
-/*
-function importCSV(event) {
-    const file = event.target.files[0];
-    if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const content = e.target.result;
-            const lines = content.split(/\r?\n/).filter(line => line.trim() !== "");
-            lines.shift(); // Remove the header row
-
-            const newCards = lines.map(line => {
-                // Regex to handle commas inside quotes correctly
-                const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                const clean = values.map(v => v.replace(/^"|"$/g, "").trim());
-
-                return {
-                    question: clean[0] || "",
-                    answer: clean[1] || "",
-                    phrase: clean[2] || "",
-                    notes: clean[3] || "",
-                    srs: null // New cards start unscheduled
-                };
-            });
-
-            const deckName = file.name.replace(".csv", "");
-            const transaction = db.transaction([STORE_NAME], "readwrite");
-            const store = transaction.objectStore(STORE_NAME);
-            
-            store.add({ name: deckName, cards: newCards });
-
-            transaction.oncomplete = () => {
-                alert(`Success! Imported "${deckName}" with ${newCards.length} cards.`);
-                renderDecks();
-            };
-        } catch (err) {
-            alert("CSV Error: " + err.message);
-        }
-    };
-    reader.readAsText(file, "UTF-8");
-}
-*/
-/*
-function importCSV(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            let content = e.target.result;
-            
-            // FIX THE GIBBERISH: Convert double-double quotes back to single quotes
-            content = content.replace(/""/g, "'");
-
-            const lines = content.split(/\r?\n/).filter(line => line.trim() !== "");
-            lines.shift(); // Remove headers
-
-            // 1. Process all lines into cards
-            let newCards = lines.map((line, index) => {
-                // SIMPLE SPLIT: Works best with the "Clean" export format
-                const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                
-                // If the split fails or array is empty, default safely
-                const clean = (values || []).map(v => v.replace(/^"|"$/g, "").trim());
-
-                return {
-                    id: Date.now() + "-" + index + "-" + Math.floor(Math.random() * 1000), // Added random key salt to guarantee absolute uniqueness
-                    question: clean[0] || "",
-                    answer: clean[1] || "",
-                    phrase: clean[2] || "",
-                    notes: clean[3] || ""
-                };
-            });
-
-            // --- THE FIX: Strip out completely blank ghost entries ---
-            newCards = newCards.filter(card => card.question.trim() !== "" || card.answer.trim() !== "");
-
-            const deckName = file.name.replace(".csv", "");
-            const transaction = db.transaction([STORE_NAME], "readwrite");
-            const store = transaction.objectStore(STORE_NAME);
-
-            // Use .put to ensure it overwrites correctly
-            store.put({ name: deckName, cards: newCards });
-
-            transaction.oncomplete = () => {
-                alert(`Import Successful! Loaded ${newCards.length} clean records.`);
-                renderDecks();
-            };
-        } catch (err) {
-            console.error("Import failed:", err);
-            alert("Check console for error.");
-        }
-    };
-    reader.readAsText(file, "UTF-8");
-}
-*/
 function importCSV(event) {
     const file = event.target.files[0];
     if (!file) return;
