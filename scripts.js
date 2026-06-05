@@ -1638,56 +1638,52 @@ async function startSRSReview(forceLoadPostponed = false) {
     const now = Date.now();
     const source = currentDeck.cards; 
     
-    // Calculate midnight tonight
+    // Define the boundary for "today"
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
     const endOfTodayTs = endOfToday.getTime();
 
     let allDue = [];
-    let soonestDue = Infinity;
-    let nextBatchCount = 0;
 
     if (forceLoadPostponed) {
-        // FIX: Only grab cards scheduled AFTER now, but BEFORE midnight tonight
-        allDue = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now && c.srs.nextReview <= endOfTodayTs))
+        // FORCE LOAD: Grabs everything in the future, no midnight limit.
+        allDue = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now))
                        .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0)); 
     } else {
+        // NORMAL LOAD: Only grabs currently due cards
         const currentlyDue = source.filter(c => {
             if (!c.srs || c.srs.mastered) return false;
             return now >= (c.srs.nextReview || 0);
         });
-
         allDue = currentlyDue.sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
-        
-        const upcoming = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now));
-        if (upcoming.length > 0) {
-            const sortedUpcoming = upcoming.sort((a, b) => a.srs.nextReview - b.srs.nextReview);
-            soonestDue = sortedUpcoming[0].srs.nextReview;
-            nextBatchCount = source.filter(c => 
-                c.srs && !c.srs.mastered && c.srs.nextReview === soonestDue
-            ).length;
-        }
     }
 
     if (typeof updateSRSBadge === "function") updateSRSBadge();
 
     if (allDue.length === 0) {
         if (!forceLoadPostponed) {
-            // FIX: Clearer message indicating it will pull from today's remaining pool
-            if (confirm("Queue is clear! Force load next 20 postponed cards from today's pool?")) {
+            if (confirm("Queue is clear! Force load next 20 upcoming cards?")) {
                 await startSRSReview(true);
                 return;
             }
         } else {
-            alert("No more postponed cards left for today!");
+            alert("No upcoming cards left!");
         }
         return;
     }
 
+    // Always take the first 20
     currentDueCards = allDue.length > 20 ? allDue.slice(0, 20) : allDue;
 
+    // POSTPONING: This is where we apply your "Today Only" rule.
+    // If we are NOT forcing, and we have more than 20, 
+    // only postpone those that were actually scheduled for today.
     if (allDue.length > 20 && !forceLoadPostponed) {
-        await postponeExcessCards(allDue.slice(20));
+        const excess = allDue.slice(20);
+        const todayExcess = excess.filter(c => c.srs.nextReview <= endOfTodayTs);
+        if (todayExcess.length > 0) {
+            await postponeExcessCards(todayExcess);
+        }
     }
 
     srsTotalSessionCount = currentDueCards.length;
