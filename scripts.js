@@ -1638,23 +1638,20 @@ async function startSRSReview(forceLoadPostponed = false) {
     const now = Date.now();
     const source = currentDeck.cards; 
     
-    // Define the boundary for "today"
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    const endOfTodayTs = endOfToday.getTime();
-
     let allDue = [];
 
     if (forceLoadPostponed) {
-        // FORCE LOAD: Grabs everything in the future, no midnight limit.
+        // Force Load: Grabs everything due in the future, sorted by soonest first
         allDue = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now))
                        .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0)); 
     } else {
-        // NORMAL LOAD: Only grabs currently due cards
+        // Normal Load: Only grabs currently due cards
         const currentlyDue = source.filter(c => {
             if (!c.srs || c.srs.mastered) return false;
             return now >= (c.srs.nextReview || 0);
         });
+
+        // Priority: Oldest overdue cards first
         allDue = currentlyDue.sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
     }
 
@@ -1662,29 +1659,20 @@ async function startSRSReview(forceLoadPostponed = false) {
 
     if (allDue.length === 0) {
         if (!forceLoadPostponed) {
-            if (confirm("Queue is clear! Force load next 20 upcoming cards?")) {
+            if (confirm("Queue is clear! Load next 20 cards anyway?")) {
                 await startSRSReview(true);
                 return;
             }
         } else {
-            alert("No upcoming cards left!");
+            alert("No cards available to review!");
         }
         return;
     }
 
-    // Always take the first 20
+    // Always take the first 20 (or fewer if less than 20 exist)
     currentDueCards = allDue.length > 20 ? allDue.slice(0, 20) : allDue;
 
-    // POSTPONING: This is where we apply your "Today Only" rule.
-    // If we are NOT forcing, and we have more than 20, 
-    // only postpone those that were actually scheduled for today.
-    if (allDue.length > 20 && !forceLoadPostponed) {
-        const excess = allDue.slice(20);
-        const todayExcess = excess.filter(c => c.srs.nextReview <= endOfTodayTs);
-        if (todayExcess.length > 0) {
-            await postponeExcessCards(todayExcess);
-        }
-    }
+    // --- DELAY OPTION REMOVED: No call to postponeExcessCards ---
 
     srsTotalSessionCount = currentDueCards.length;
     srsCompletedInSession = 0;
