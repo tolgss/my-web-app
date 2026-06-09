@@ -128,26 +128,12 @@ function renderDecks() {
     getRequest.onsuccess = () => {
         container.innerHTML = ''; // Clears the list
         const now = Date.now();
-        
-        // 1. Calculate the end of the current day (11:59:59 PM)
-        const endOfToday = new Date();
-        endOfToday.setHours(23, 59, 59, 999);
-        const endOfTodayTs = endOfToday.getTime();
-
         const allDecks = getRequest.result;
 
         allDecks.forEach(deck => {
-            // 2. Calculate Due Now (Red Badge)
+            // Calculate Total Due Now (All unmastered cards whose review time has arrived or passed)
             const dueCount = deck.cards ? deck.cards.filter(c => 
                 c.srs && !c.srs.mastered && now >= (c.srs.nextReview || 0)
-            ).length : 0;
-
-            // 3. Calculate Remaining for Today (Blue Badge)
-            // Filter: Scheduled after NOW but before MIDNIGHT
-            const pendingTodayCount = deck.cards ? deck.cards.filter(c => 
-                c.srs && !c.srs.mastered && 
-                (c.srs.nextReview || 0) > now && 
-                (c.srs.nextReview || 0) <= endOfTodayTs
             ).length : 0;
 
             const div = document.createElement('div');
@@ -155,6 +141,7 @@ function renderDecks() {
             div.style.position = 'relative'; 
             div.onclick = () => openDeckDetail(deck.id, deck.name);
             
+            // REMOVED: Blue postponed badge completely cleared away from UI layout
             div.innerHTML = `
                 <span>${deck.name}</span>
                 <div>
@@ -182,27 +169,6 @@ function renderDecks() {
                 ">
                     ${dueCount}
                 </div>
-
-                <div class="list-postponed-badge" style="
-                    position: absolute;
-                    top: -5px;
-                    right: 18px; 
-                    background: #3498db;
-                    color: white;
-                    border-radius: 50%;
-                    width: 20px;
-                    height: 20px;
-                    display: ${pendingTodayCount > 0 ? 'flex' : 'none'};
-                    align-items: center;
-                    justify-content: center;
-                    font-size: 10px;
-                    font-weight: bold;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-                    z-index: 5;
-                    pointer-events: none;
-                ">
-                    ${pendingTodayCount}
-                </div>
             `;
             container.appendChild(div);
         });
@@ -213,21 +179,40 @@ function updateDeckStats(deck) {
     const now = Date.now();
     if (!deck || !deck.cards) return;
 
-    // We keep the postponed logic only to decide if the Force Load button shows up
-    const postponed = deck.cards.filter(c => 
-        c.srs && !c.srs.mastered && 
-        (c.srs.nextReview > now && c.srs.nextReview <= (now + 5400000))
-    );
+    // 1. Gather all unmastered cards
+    const unmasteredCards = deck.cards.filter(c => c.srs && !c.srs.mastered);
 
-    // --- LEAVE THE LABEL TO THE MASTER FUNCTION ---
+    // 2. Separate into today's due vs future upcoming cards
+    const currentlyDue = unmasteredCards.filter(c => now >= (c.srs.nextReview || 0));
+    const upcomingCards = unmasteredCards.filter(c => now < (c.srs.nextReview || 0));
+
     if (typeof updateSRSBadge === "function") {
         updateSRSBadge(); 
     }
 
-    // Keep the Force Load button toggle logic
-    const forceBtn = document.querySelector('button[onclick="startSRSReview(true)"]');
-    if (forceBtn) {
-        forceBtn.style.display = postponed.length > 0 ? 'block' : 'none';
+    // --- UI BUTTON LABELS & VISIBILITY ---
+    const startReviewBtn = document.getElementById('startReviewBtn'); 
+    const studyAheadBtn = document.querySelector('button[onclick="startSRSReview(true)"]');
+
+    // Main Button: Shows exactly how many are left to review right now
+    if (startReviewBtn) {
+        if (currentlyDue.length > 0) {
+            startReviewBtn.innerText = `Start Review (${currentlyDue.length} remaining)`;
+            startReviewBtn.style.display = 'block';
+        } else {
+            startReviewBtn.innerText = `Review Cleared`;
+            startReviewBtn.style.display = 'none'; 
+        }
+    }
+
+    // Study Ahead Button: ONLY shows when today's queue is 0, and future cards exist
+    if (studyAheadBtn) {
+        if (currentlyDue.length === 0 && upcomingCards.length > 0) {
+            studyAheadBtn.style.display = 'block';
+            studyAheadBtn.innerText = `Study Ahead (${upcomingCards.length} upcoming)`;
+        } else {
+            studyAheadBtn.style.display = 'none';
+        }
     }
 }
 
@@ -1631,7 +1616,7 @@ async function startSRSReview(forceLoadPostponed = false) {
     }
 }
 */
-async function startSRSReview(forceLoadPostponed = false) {
+async function startSRSReview(studyAheadMode = false) {
     window.currentViewMode = "srs";
     if (!currentDeck || !currentDeck.cards) return;
     
@@ -1640,39 +1625,57 @@ async function startSRSReview(forceLoadPostponed = false) {
     
     let allDue = [];
 
-    if (forceLoadPostponed) {
-        // Force Load: Grabs everything due in the future, sorted by soonest first
-        allDue = source.filter(c => c.srs && !c.srs.mastered && (c.srs.nextReview > now))
-                       .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0)); 
-    } else {
-        // Normal Load: Only grabs currently due cards
-        const currentlyDue = source.filter(c => {
-            if (!c.srs || c.srs.mastered) return false;
-            return now >= (c.srs.nextReview || 0);
+    // Gather all unmastered cards
+    const unmasteredCards = source.filter(c => c.srs && !c.srs.mastered);
+    const currentlyDue = unmasteredCards.filter(c => now >= (c.srs.nextReview || 0))
+                                        .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
+
+    if (studyAheadMode) {
+        // --- TIMELINE CASCADE SHIFT ---
+        // 1. Grab all cards sitting in the future
+        const upcomingCards = unmasteredCards.filter(c => now < (c.srs.nextReview || 0));
+        
+        // 2. Subtract 24 hours from all future cards to seamlessly shift Day 3 -> Day 2, etc.
+        const oneDayInMs = 24 * 60 * 60 * 1000; 
+        upcomingCards.forEach(c => {
+            if (c.srs.nextReview) {
+                c.srs.nextReview -= oneDayInMs;
+            }
         });
 
-        // Priority: Oldest overdue cards first
-        allDue = currentlyDue.sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
+        // 3. Save this newly shifted layout to your data storage immediately
+        // NOTE: Change 'saveDeckData' to your actual deck saving function name if different!
+        if (typeof saveDeckData === "function") {
+            await saveDeckData(currentDeck);
+        } else if (typeof saveSession === "function") {
+            await saveSession();
+        }
+
+        // 4. Re-evaluate what is due NOW (since tomorrow's cards have now entered today's timeline)
+        allDue = unmasteredCards.filter(c => now >= (c.srs.nextReview || 0))
+                                .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
+    } else {
+        // Normal Mode: Grab only today's standard overdue cards
+        allDue = currentlyDue;
     }
 
     if (typeof updateSRSBadge === "function") updateSRSBadge();
 
+    // Safety check if absolutely no cards match criteria
     if (allDue.length === 0) {
-        if (!forceLoadPostponed) {
-            if (confirm("Queue is clear! Load next 20 cards anyway?")) {
+        if (!studyAheadMode) {
+            if (confirm("Today's queue is clear! Want to study upcoming cards?")) {
                 await startSRSReview(true);
                 return;
             }
         } else {
-            alert("No cards available to review!");
+            alert("No upcoming cards available to review!");
         }
         return;
     }
 
-    // Always take the first 20 (or fewer if less than 20 exist)
-    currentDueCards = allDue.length > 20 ? allDue.slice(0, 20) : allDue;
-
-    // --- DELAY OPTION REMOVED: No call to postponeExcessCards ---
+    // Grab up to the first 20 cards for this immediate round
+    currentDueCards = allDue.slice(0, 20);
 
     srsTotalSessionCount = currentDueCards.length;
     srsCompletedInSession = 0;
@@ -1687,6 +1690,9 @@ async function startSRSReview(forceLoadPostponed = false) {
         modal.style.display = 'flex';
         renderSRSModalCard();
     }
+
+    // Refresh UI states to show accurate remaining balances immediately
+    updateDeckStats(currentDeck);
 }
 function adjustSRSInterval(delta) {
     const card = currentDueCards[srsModalIndex];
@@ -1756,54 +1762,7 @@ async function postponeExcessCards(cards) {
     });
 }
 */
-async function postponeExcessCards(cards) {
-    return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(STORE_NAME);
-        const getReq = store.get(currentDeckId);
 
-        getReq.onsuccess = () => {
-            const deck = getReq.result;
-            if (!deck) return resolve();
-
-            const now = Date.now();
-            
-            // THE TODAY CAP: Calculate 11:59:59 PM for tonight
-            const endOfToday = new Date();
-            endOfToday.setHours(23, 59, 59, 999);
-            const endOfTodayTs = endOfToday.getTime();
-
-            // Calculate the standard 1-hour delay
-            let newTime = now + 3600000; 
-            
-            // If 1 hour from now crosses midnight, cap it at the very end of today
-            if (newTime > endOfTodayTs) {
-                newTime = endOfTodayTs;
-            }
-
-            const targetIds = new Set(cards.map(c => c.id));
-
-            deck.cards.forEach(card => {
-                if (targetIds.has(card.id)) {
-                    if (!card.srs) card.srs = { level: 0, mastered: false };
-                    card.srs.nextReview = newTime;
-                }
-            });
-
-            currentDeck = deck; 
-            reviewCards = deck.cards.slice();
-            store.put(deck);
-        };
-
-        transaction.oncomplete = () => {
-            console.log(`%c ⏳ Postponed ${cards.length} cards within today's window.`, "color: #ffa500");
-            if (typeof updateSRSBadge === "function") updateSRSBadge();
-            resolve();
-        };
-
-        transaction.onerror = (e) => reject(e);
-    });
-}
 function renderSRSModalCard() {
     if (!currentDueCards || currentDueCards.length === 0) {
         closeSRSModal();
