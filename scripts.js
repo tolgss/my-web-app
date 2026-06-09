@@ -1415,47 +1415,34 @@ function updateSRSBadge() {
     srsBtn.style.position = 'relative';
     const now = Date.now();
     
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
-    const endOfTodayTs = endOfToday.getTime();
-
+    // 1. Gather all unmastered cards
     const activeSRS = currentDeck.cards.filter(c => c.srs && !c.srs.mastered);
     
+    // 2. Count exactly what is due right now
     const dueCount = activeSRS.filter(c => now >= (c.srs.nextReview || 0)).length;
-    const upcoming = activeSRS.filter(c => (c.srs.nextReview || 0) > now)
-                               .sort((a, b) => a.srs.nextReview - b.srs.nextReview);
+    
+    // 3. Find all cards sitting in the future
+    const upcoming = activeSRS.filter(c => (c.srs.nextReview || 0) > now);
 
-    const pendingToday = activeSRS.filter(c => 
-        (c.srs.nextReview || 0) > now && (c.srs.nextReview || 0) <= endOfTodayTs
-    ).length;
-
-    let nextText = "";
-    let labelColor = "#666";
-
-    if (dueCount === 0 && upcoming.length > 0) {
-        const nextTime = upcoming[0].srs.nextReview;
-        const totalMins = Math.ceil((nextTime - now) / 60000);
-        if (totalMins < 60) {
-            nextText = `Next: ${totalMins}m`;
-            if (totalMins <= 10) labelColor = "#ffcc00"; 
-        } else {
-            const h = Math.floor(totalMins / 60);
-            const m = totalMins % 60;
-            nextText = m > 0 ? `Next: ${h}h ${m}m` : `Next: ${h}h`;
-        }
+    // --- CLEAN RAW LABEL ENGINE (No Hourly Timers) ---
+    let timelineStatusText = "";
+    if (dueCount > 0) {
+        timelineStatusText = `${dueCount} Due Now`;
+    } else if (upcoming.length > 0) {
+        timelineStatusText = `${upcoming.length} Upcoming`;
+    } else {
+        timelineStatusText = "All Clear";
     }
 
-    // Calculate the batch size for the (337) part
-    const batchSize = upcoming.length > 0 ? activeSRS.filter(c => c.srs.nextReview === upcoming[0].srs.nextReview).length : 0;
-
-    // --- FIX APPLIED HERE: Used activeSRS.length instead of totalInDeck ---
+    // --- UPDATE SRS REVIEW BUTTON INNER HTML ---
+    // Cleanly strips away the old blue badge layout entirely
     srsBtn.innerHTML = `
         <span style="font-weight: bold;">SRS Review</span>
         <div style="display: flex; justify-content: center; gap: 5px; font-size: 0.7em; color: #666; margin-top: 2px;">
             <span>Total: ${activeSRS.length} Cards</span>
             <span style="opacity: 0.5;">|</span>
-            <span style="color: ${labelColor} !important; font-weight: bold;">
-                ${dueCount > 0 ? `${dueCount} Due Now` : `${nextText} (${batchSize})`}
+            <span style="font-weight: bold; color: ${dueCount > 0 ? '#ff4444' : '#666'} !important;">
+                ${timelineStatusText}
             </span>
         </div>
 
@@ -1467,36 +1454,23 @@ function updateSRSBadge() {
             align-items: center; justify-content: center; 
             font-size: 11px; font-weight: bold; z-index: 10;
         ">${dueCount}</div>
-
-        <div id="srsPendingBadge" style="
-            position: absolute; top: 8px; right: 34px;
-            background: #3498db; color: white; border-radius: 50%; 
-            width: 22px; height: 22px; 
-            display: ${pendingToday > 0 ? 'flex' : 'none'}; 
-            align-items: center; justify-content: center; 
-            font-size: 11px; font-weight: bold; z-index: 9;
-        ">${pendingToday}</div>
     `;
 
+    // --- SYNCHRONIZE STUDY AHEAD BUTTON STATES ---
     const externalForceBtn = document.getElementById('forceLoad20Btn');
     if (externalForceBtn) {
         const hasUpcoming = upcoming.length > 0;
-        const isDueNow = dueCount > 0;
 
-        externalForceBtn.style.display = hasUpcoming ? 'block' : 'none';
-
-        if (isDueNow) {
-            externalForceBtn.disabled = true;
-            externalForceBtn.style.background = '#ccc';
-            externalForceBtn.style.color = '#888';
-            externalForceBtn.style.cursor = 'not-allowed';
-            externalForceBtn.innerText = `Finish Due Cards First`;
-        } else {
+        // Button ONLY displays if today's queue is 0, but there are future cards left
+        if (dueCount === 0 && hasUpcoming) {
+            externalForceBtn.style.display = 'block';
             externalForceBtn.disabled = false;
             externalForceBtn.style.background = '#444';
             externalForceBtn.style.color = 'white';
             externalForceBtn.style.cursor = 'pointer';
-            externalForceBtn.innerText = `Force Load Next 20`;
+            externalForceBtn.innerText = `Study Ahead (Next Day) — ${upcoming.length} Cards`;
+        } else {
+            externalForceBtn.style.display = 'none';
         }
     }
 }

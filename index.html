@@ -109,40 +109,43 @@
 	        <div id="reviewTotalSub" style="font-size: 0.7em; color: #666;">Total: 0 Cards</div>
 	    </button>
 	    
-	    <button id="srsReviewBtn" class="menu-btn-full" onclick="startSRSReview()" ...>
-		    <span style="font-weight: bold;">SRS Review</span>
-		    <div id="srsScheduledSub" style="font-size: 0.7em; color: #666; margin-top: 2px;">Scheduled: 0 Cards</div>
-		    <div id="srsNextLabel"></div> 
-		    <span id="srsBadge" ...>0</span>
-		</button>
+	    <button id="srsReviewBtn" class="menu-btn-full" onclick="startSRSReview()">
+	        <span style="font-weight: bold;">SRS Review</span>
+	        <div id="srsScheduledSub" style="font-size: 0.7em; color: #666; margin-top: 2px;">Scheduled: 0 Cards</div>
+	        <div id="srsNextLabel"></div> 
+	        <span id="srsBadge">0</span>
+	    </button>
+	    
+	    <button id="forceLoad20Btn" onclick="startSRSReview(true)" style="
+	        width: 100%; 
+	        margin-top: 12px; 
+	        padding: 15px; 
+	        background: #444; 
+	        color: white; 
+	        border: none; 
+	        border-radius: 8px; 
+	        font-size: 0.95em; 
+	        font-weight: bold;
+	        display: none;
+	        transition: background 0.3s ease;
+	    ">
+	        Study Ahead (Next Day)
+	    </button>
+
 	    <button id="todaysReviewBtn" class="menu-btn-full" onclick="startTodaysReview()" style="display: none; margin-top: 10px; background-color: #f0f0f0; border: 1px solid #ddd;">
-		    <span style="font-weight: bold;">Today's Review</span>
-		    <div id="todaysCountSub" style="font-size: 0.7em; color: #666; margin-top: 2px;">Reviewed Today: 0 Cards</div>
-		</button>
-		<button id="forceLoad20Btn" onclick="startSRSReview(true)" style="
-		    width: 100%; 
-		    margin-top: 12px; 
-		    padding: 15px; 
-		    background: #444; 
-		    color: white; 
-		    border: none; 
-		    border-radius: 8px; 
-		    font-size: 0.95em; 
-		    font-weight: bold;
-		    display: none;
-		    transition: background 0.3s ease;
-		">
-		    Study Ahead (Next Day)
-		</button>
+	        <span style="font-weight: bold;">Today's Review</span>
+	        <div id="todaysCountSub" style="font-size: 0.7em; color: #666; margin-top: 2px;">Reviewed Today: 0 Cards</div>
+	    </button>
+	    
 	    <button id="quickRecallBtn" class="menu-btn-full" onclick="startQuickRecall()" style="display: none;">
-		    Quick Recall (<span id="recallBtnCount">0</span>)
-		</button>
-		<button id="randomChallengeBtn" class="menu-btn-full" onclick="startRandomDeckChallenge()">
-		    🎯 Random 20 Challenge
-		</button>
-		<button id="matchBlitzBtn" class="menu-btn-full" onclick="startMatchBlitz()" style="display: none;">
-		    Match Blitz (<span id="matchBtnCount">0</span>)
-		</button>
+	        Quick Recall (<span id="recallBtnCount">0</span>)
+	    </button>
+	    <button id="randomChallengeBtn" class="menu-btn-full" onclick="startRandomDeckChallenge()">
+	        🎯 Random 20 Challenge
+	    </button>
+	    <button id="matchBlitzBtn" class="menu-btn-full" onclick="startMatchBlitz()" style="display: none;">
+	        Match Blitz (<span id="matchBtnCount">0</span>)
+	    </button>
 	    <button class="menu-btn-full" onclick="toggleCardList()">List</button>
 	</div>
 
@@ -485,7 +488,7 @@
         <!-- Rows will be injected here -->
     </div>
 </div>
-<footer>v1.0.4</footer>
+<footer>v1.0.5</footer>
     <script src="scripts.js?v=3"></script>
     
 </body>
