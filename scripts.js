@@ -190,28 +190,42 @@ function updateDeckStats(deck) {
         updateSRSBadge(); 
     }
 
-    // --- UI BUTTON LABELS & VISIBILITY ---
-    const startReviewBtn = document.getElementById('startReviewBtn'); 
-    const studyAheadBtn = document.querySelector('button[onclick="startSRSReview(true)"]');
+    // --- TARGET YOUR EXACT HTML BUTTONS ---
+    const srsReviewBtn = document.getElementById('srsReviewBtn');
+    const srsScheduledSub = document.getElementById('srsScheduledSub');
+    const srsNextLabel = document.getElementById('srsNextLabel');
+    const srsBadge = document.getElementById('srsBadge');
+    const forceLoad20Btn = document.getElementById('forceLoad20Btn');
 
-    // Main Button: Shows exactly how many are left to review right now
-    if (startReviewBtn) {
+    // Main SRS Button text logic
+    if (srsReviewBtn && srsScheduledSub) {
         if (currentlyDue.length > 0) {
-            startReviewBtn.innerText = `Start Review (${currentlyDue.length} remaining)`;
-            startReviewBtn.style.display = 'block';
+            srsScheduledSub.innerText = `Remaining: ${currentlyDue.length} Cards`;
+            srsReviewBtn.style.display = 'block';
         } else {
-            startReviewBtn.innerText = `Review Cleared`;
-            startReviewBtn.style.display = 'none'; 
+            srsScheduledSub.innerText = `Today's Reviews Cleared`;
         }
     }
 
-    // Study Ahead Button: ONLY shows when today's queue is 0, and future cards exist
-    if (studyAheadBtn) {
+    // Clean up old countdown label if it exists
+    if (srsNextLabel) {
+        srsNextLabel.innerText = ''; 
+    }
+    
+    // Synced numeric badge update
+    if (srsBadge) {
+        srsBadge.innerText = currentlyDue.length;
+        srsBadge.style.display = currentlyDue.length > 0 ? 'block' : 'none';
+    }
+
+    // --- STUDY AHEAD BUTTON ENGINE ---
+    // This button ONLY appears when today's queue hit 0, but future cards exist
+    if (forceLoad20Btn) {
         if (currentlyDue.length === 0 && upcomingCards.length > 0) {
-            studyAheadBtn.style.display = 'block';
-            studyAheadBtn.innerText = `Study Ahead (${upcomingCards.length} upcoming)`;
+            forceLoad20Btn.style.display = 'block';
+            forceLoad20Btn.innerText = `Study Ahead (Next Day) — ${upcomingCards.length} Cards`;
         } else {
-            studyAheadBtn.style.display = 'none';
+            forceLoad20Btn.style.display = 'none';
         }
     }
 }
@@ -1631,11 +1645,10 @@ async function startSRSReview(studyAheadMode = false) {
                                         .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
 
     if (studyAheadMode) {
-        // --- TIMELINE CASCADE SHIFT ---
-        // 1. Grab all cards sitting in the future
+        // --- TIMELINE CASCADE SHIFT (Study Ahead Mode) ---
         const upcomingCards = unmasteredCards.filter(c => now < (c.srs.nextReview || 0));
         
-        // 2. Subtract 24 hours from all future cards to seamlessly shift Day 3 -> Day 2, etc.
+        // Subtract 24 hours from all future cards to shift Day 3 -> Day 2, etc.
         const oneDayInMs = 24 * 60 * 60 * 1000; 
         upcomingCards.forEach(c => {
             if (c.srs.nextReview) {
@@ -1643,38 +1656,43 @@ async function startSRSReview(studyAheadMode = false) {
             }
         });
 
-        // 3. Save this newly shifted layout to your data storage immediately
-        // NOTE: Change 'saveDeckData' to your actual deck saving function name if different!
-        if (typeof saveDeckData === "function") {
-            await saveDeckData(currentDeck);
-        } else if (typeof saveSession === "function") {
-            await saveSession();
-        }
+        // Save this newly shifted layout back to your IndexedDB store safely
+        const transaction = db.transaction([STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(STORE_NAME);
+        store.put(currentDeck);
 
-        // 4. Re-evaluate what is due NOW (since tomorrow's cards have now entered today's timeline)
+        await new Promise((resolve) => {
+            transaction.oncomplete = () => resolve();
+        });
+
+        // Re-evaluate what is due NOW (since tomorrow's cards have entered today's timeline)
         allDue = unmasteredCards.filter(c => now >= (c.srs.nextReview || 0))
                                 .sort((a, b) => (a.srs.nextReview || 0) - (b.srs.nextReview || 0));
     } else {
-        // Normal Mode: Grab only today's standard overdue cards
+        // Normal Mode: Grab only today's overdue cards
         allDue = currentlyDue;
     }
 
     if (typeof updateSRSBadge === "function") updateSRSBadge();
 
-    // Safety check if absolutely no cards match criteria
+    // --- CASUAL BATCH NOTIFICATION DIALOGS ---
     if (allDue.length === 0) {
         if (!studyAheadMode) {
-            if (confirm("Today's queue is clear! Want to study upcoming cards?")) {
+            // Prompts to move into tomorrow's timeline early if today's slate is clear
+            if (confirm("Today's queue is fully clear! Would you like to pull the next day's cards forward to study now?")) {
                 await startSRSReview(true);
                 return;
             }
         } else {
-            alert("No upcoming cards available to review!");
+            alert("No upcoming cards left in this deck to study!");
         }
         return;
+    } else if (!studyAheadMode && currentlyDue.length > 20) {
+        // Log clean confirmation in background instead of blocking the app with an alert box
+        console.log(`%c 📑 Continuing with today's reviews... ${currentlyDue.length - 20} cards remaining.`, "color: #3498db");
     }
 
-    // Grab up to the first 20 cards for this immediate round
+    // Slice cleanly up to 20 cards
     currentDueCards = allDue.slice(0, 20);
 
     srsTotalSessionCount = currentDueCards.length;
@@ -1691,7 +1709,7 @@ async function startSRSReview(studyAheadMode = false) {
         renderSRSModalCard();
     }
 
-    // Refresh UI states to show accurate remaining balances immediately
+    // Update labels and visibility immediately
     updateDeckStats(currentDeck);
 }
 function adjustSRSInterval(delta) {
@@ -1707,7 +1725,7 @@ function adjustSRSInterval(delta) {
     syncSRSIntervalLabels(newLevel);
     
     if (navigator.vibrate) navigator.vibrate(10);
-}
+} 
 // Formats minutes into human readable text (10m, 3h, 2d)
 function formatMins(mins) {
     if (mins < 60) return mins + "m";
